@@ -54,6 +54,7 @@ import com.example.ui.theme.DarkSurface
 import com.example.ui.theme.SpotGreen
 import com.example.ui.theme.TextGrey
 import com.example.ui.theme.White
+import com.example.ui.theme.Zinc700
 
 class MainActivity : ComponentActivity() {
 
@@ -354,68 +355,90 @@ fun MiniPlayerRow(
 ) {
     val isPlaying by PlaybackManager.isPlaying.collectAsStateWithLifecycle()
     val isBuffering by PlaybackManager.isPlayingBuffering.collectAsStateWithLifecycle()
+    val progress by PlaybackManager.playbackProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .background(DarkCardSurface, RoundedCornerShape(8.dp))
-            .clickable { onClicked() }
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .clickable { onClicked() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface.copy(alpha = 0.95f)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
     ) {
-        AsyncImage(
-            model = track.thumbnailUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(4.dp))
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = track.title,
-                color = White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = track.author,
-                color = TextGrey,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        
-        if (isBuffering) {
-            CircularProgressIndicator(
-                color = SpotGreen,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(24.dp)
-            )
-        } else {
-            IconButton(onClick = { PlaybackManager.togglePlayPause(context) }) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "Pause",
-                    tint = White
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = track.thumbnailUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
                 )
-            }
-        }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "Şu an çalıyor: ${track.title}",
+                        color = White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = track.author,
+                        color = TextGrey,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
+                if (isBuffering) {
+                    CircularProgressIndicator(
+                        color = SpotGreen,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    IconButton(onClick = { PlaybackManager.togglePlayPause(context) }) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Oynat/Durdur",
+                            tint = White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
 
-        IconButton(onClick = { PlaybackManager.skipToNext(context) }) {
-            Icon(
-                imageVector = Icons.Default.SkipNext,
-                contentDescription = "Next",
-                tint = White
+                IconButton(onClick = { PlaybackManager.skipToNext(context) }) {
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = "Sıradaki",
+                        tint = White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            
+            // Beautiful progress line running at the bottom of the card
+            LinearProgressIndicator(
+                progress = progress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.6.dp),
+                color = SpotGreen,
+                trackColor = Color.White.copy(alpha = 0.08f)
             )
         }
     }
@@ -441,13 +464,64 @@ fun HomeTab(viewModel: FlofysViewModel) {
             .padding(horizontal = 16.dp)
             .statusBarsPadding()
     ) {
+        // Elegant Dark Header branding
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(SpotGreen, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(modifier = Modifier.size(width = 15.dp, height = 2.dp).background(Color.Black, CircleShape))
+                            Box(modifier = Modifier.size(width = 11.dp, height = 2.dp).background(Color.Black, CircleShape))
+                            Box(modifier = Modifier.size(width = 7.dp, height = 2.dp).background(Color.Black, CircleShape))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Flofys",
+                        color = White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(DarkCardSurface, CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Profil",
+                        tint = White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
         item {
             Text(
                 text = "İyi Günler",
                 color = White,
-                fontSize = 28.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 16.dp)
+                modifier = Modifier.padding(top = 12.dp, bottom = 16.dp)
             )
         }
 
@@ -459,33 +533,35 @@ fun HomeTab(viewModel: FlofysViewModel) {
                     modifier = Modifier
                         .height(140.dp)
                         .padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(playlists.take(4)) { playlist ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(56.dp)
-                                .background(DarkCardSurface, RoundedCornerShape(6.dp))
+                                .height(60.dp)
+                                .background(DarkCardSurface, RoundedCornerShape(12.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(12.dp))
                                 .clickable { viewModel.setTab(AppTab.LIBRARY) }
-                                .padding(horizontal = 8.dp),
+                                .padding(horizontal = 10.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier
                                         .size(40.dp)
-                                        .background(SpotGreen, RoundedCornerShape(4.dp)),
+                                        .background(SpotGreen, RoundedCornerShape(8.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = if (playlist.iconIdentifier == "favorite") Icons.Default.Favorite else Icons.Default.List,
                                         contentDescription = null,
-                                        tint = Color.Black
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
                                 Text(
                                     text = playlist.name,
                                     color = White,
@@ -506,9 +582,9 @@ fun HomeTab(viewModel: FlofysViewModel) {
             Text(
                 text = "En Son Çalınanlar",
                 color = White,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 12.dp)
+                modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)
             )
         }
 
@@ -517,13 +593,17 @@ fun HomeTab(viewModel: FlofysViewModel) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 24.dp),
+                        .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(12.dp))
+                        .padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Henüz parça oynatılmadı.\nArama panelinden müzik bulabilirsiniz.",
                         color = TextGrey,
-                        fontSize = 14.sp
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 18.sp
                     )
                 }
             }
@@ -533,7 +613,7 @@ fun HomeTab(viewModel: FlofysViewModel) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(history) { historyItem ->
                         val track = Track(
@@ -550,20 +630,25 @@ fun HomeTab(viewModel: FlofysViewModel) {
                                 .width(120.dp)
                                 .clickable { viewModel.playTrack(track) }
                         ) {
-                            AsyncImage(
-                                model = track.thumbnailUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
+                            Box(
                                 modifier = Modifier
                                     .size(120.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
+                            ) {
+                                AsyncImage(
+                                    model = track.thumbnailUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = track.title,
                                 color = White,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -585,9 +670,9 @@ fun HomeTab(viewModel: FlofysViewModel) {
             Text(
                 text = "İndirilen Parçalar",
                 color = White,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 12.dp)
+                modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)
             )
         }
 
@@ -596,17 +681,20 @@ fun HomeTab(viewModel: FlofysViewModel) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(DarkCardSurface, RoundedCornerShape(8.dp))
+                        .background(DarkCardSurface, RoundedCornerShape(14.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(14.dp))
                         .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = TextGrey)
+                        Icon(Icons.Default.Check, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(28.dp))
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Henüz indirilmiş müzik bulunmuyor.\nMüzikleri doğrudan cihazınıza indirebilirsiniz.",
                             color = TextGrey,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 18.sp
                         )
                     }
                 }
@@ -616,8 +704,9 @@ fun HomeTab(viewModel: FlofysViewModel) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                        .background(DarkCardSurface, RoundedCornerShape(8.dp))
+                        .padding(vertical = 4.dp)
+                        .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
                         .clickable { viewModel.playTrack(track) }
                         .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -627,8 +716,9 @@ fun HomeTab(viewModel: FlofysViewModel) {
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(50.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -636,7 +726,7 @@ fun HomeTab(viewModel: FlofysViewModel) {
                         Text(track.author, color = TextGrey, fontSize = 11.sp, maxLines = 1)
                     }
                     IconButton(onClick = { viewModel.deleteDownloadedTrack(track.id) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Sil", tint = Color.Red)
+                        Icon(Icons.Default.Delete, contentDescription = "Sil", tint = Color.Red, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -665,19 +755,19 @@ fun SearchTab(viewModel: FlofysViewModel) {
         Text(
             text = "Arama",
             color = White,
-            fontSize = 28.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 12.dp)
+            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
         )
 
-        // Custom search text bar
+        // Custom search text bar - Beautifully rounded matching Design HTML input style
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { viewModel.updateSearchQuery(it) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
-            placeholder = { Text("Şarkı, sanatçı veya albüm ismi...", color = TextGrey) },
+            placeholder = { Text("Şarkı, sanatçı veya albüm ismi...", color = TextGrey, fontSize = 14.sp) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextGrey) },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
@@ -691,11 +781,11 @@ fun SearchTab(viewModel: FlofysViewModel) {
                 focusedTextColor = White,
                 unfocusedTextColor = White,
                 focusedBorderColor = SpotGreen,
-                unfocusedBorderColor = DarkCardSurface,
+                unfocusedBorderColor = Color.Transparent,
                 focusedContainerColor = DarkCardSurface,
                 unfocusedContainerColor = DarkCardSurface
             ),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(24.dp) // Exact search bar rounded-full likeness
         )
 
         // Suggestions Dropdown View in real-time as typing
@@ -704,7 +794,9 @@ fun SearchTab(viewModel: FlofysViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkCardSurface)
+                colors = CardDefaults.cardColors(containerColor = DarkCardSurface),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
             ) {
                 Column {
                     suggestions.take(6).forEach { word ->
@@ -719,9 +811,9 @@ fun SearchTab(viewModel: FlofysViewModel) {
                         ) {
                             Icon(Icons.Default.Search, contentDescription = null, tint = TextGrey, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text(word, color = White, fontSize = 14.sp)
+                            Text(word, color = White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                         }
-                        Divider(color = DarkSurface, thickness = 1.dp)
+                        Divider(color = Color.White.copy(alpha = 0.05f), thickness = 1.dp)
                     }
                 }
             }
@@ -746,8 +838,9 @@ fun SearchTab(viewModel: FlofysViewModel) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                            .background(DarkCardSurface, RoundedCornerShape(8.dp))
+                            .padding(vertical = 4.dp)
+                            .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
                             .clickable { viewModel.playTrack(track) }
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -757,8 +850,9 @@ fun SearchTab(viewModel: FlofysViewModel) {
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(50.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -832,7 +926,7 @@ fun SearchTab(viewModel: FlofysViewModel) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp)
-                            .background(item.second, RoundedCornerShape(8.dp))
+                            .background(item.second, RoundedCornerShape(12.dp))
                             .clickable { viewModel.updateSearchQuery(item.first); viewModel.triggerSearch(item.first) }
                             .padding(12.dp)
                     ) {
@@ -877,7 +971,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+                    .padding(top = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { activeLibraryPlaylist = null }) {
@@ -886,12 +980,12 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                 Text(
                     text = playlist.name,
                     color = White,
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = { viewModel.deletePlaylist(playlist.id); activeLibraryPlaylist = null }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Sil", tint = Color.Red)
+                    Icon(Icons.Default.Delete, contentDescription = "Sil", tint = Color.Red, modifier = Modifier.size(20.dp))
                 }
             }
 
@@ -899,7 +993,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                 playlist.description ?: "Çalma listesi",
                 color = TextGrey,
                 fontSize = 13.sp,
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
             )
 
             if (playlistTracks.isEmpty()) {
@@ -912,7 +1006,9 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                     Text(
                         text = "Bu çalma listesi boş.\nArama kısmından müzik ekleyebilirsiniz.",
                         color = TextGrey,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 18.sp
                     )
                 }
             } else {
@@ -923,8 +1019,9 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .background(DarkCardSurface, RoundedCornerShape(8.dp))
+                                .padding(vertical = 4.dp)
+                                .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
                                 .clickable { viewModel.playQueue(playlistTracks, i) }
                                 .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -934,8 +1031,9 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(50.dp)
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -943,7 +1041,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                                 Text(track.author, color = TextGrey, fontSize = 11.sp, maxLines = 1)
                             }
                             IconButton(onClick = { viewModel.removeTrackFromPlaylist(playlist.id, track.id) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Sil", tint = TextGrey)
+                                Icon(Icons.Default.Delete, contentDescription = "Sil", tint = TextGrey, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -954,7 +1052,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+                    .padding(top = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -979,7 +1077,9 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                     Text(
                         "Hiç çalma listeniz yok.\nSağ üstteki + butonuna basarak oluşturun.",
                         color = TextGrey,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 20.sp
                     )
                 }
             } else {
@@ -990,8 +1090,9 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .background(DarkCardSurface, RoundedCornerShape(8.dp))
+                                .padding(vertical = 4.dp)
+                                .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(14.dp))
                                 .clickable { activeLibraryPlaylist = playlist }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -999,14 +1100,15 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                             Box(
                                 modifier = Modifier
                                     .size(52.dp)
-                                    .background(SpotGreen, RoundedCornerShape(8.dp)),
+                                    .background(SpotGreen.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                                    .border(1.dp, SpotGreen.copy(alpha = 0.20f), RoundedCornerShape(10.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = if (playlist.iconIdentifier == "favorite") Icons.Default.Favorite else Icons.Default.List,
                                     contentDescription = null,
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(28.dp)
+                                    tint = SpotGreen,
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(16.dp))
@@ -1033,7 +1135,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
         if (isCreatingDialog) {
             AlertDialog(
                 onDismissRequest = { isCreatingDialog = false },
-                title = { Text("Yeni Çalma Listesi", color = White) },
+                title = { Text("Yeni Çalma Listesi", color = White, fontWeight = FontWeight.Bold) },
                 text = {
                     Column {
                         OutlinedTextField(
@@ -1041,14 +1143,30 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                             onValueChange = { playlistNameInput = it },
                             label = { Text("İsim") },
                             singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = White, unfocusedTextColor = White)
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = White, 
+                                unfocusedTextColor = White,
+                                focusedBorderColor = SpotGreen,
+                                unfocusedBorderColor = Zinc700,
+                                focusedLabelColor = SpotGreen,
+                                unfocusedLabelColor = TextGrey
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         OutlinedTextField(
                             value = playlistDescInput,
                             onValueChange = { playlistDescInput = it },
                             label = { Text("Açıklama") },
-                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = White, unfocusedTextColor = White)
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = White, 
+                                unfocusedTextColor = White,
+                                focusedBorderColor = SpotGreen,
+                                unfocusedBorderColor = Zinc700,
+                                focusedLabelColor = SpotGreen,
+                                unfocusedLabelColor = TextGrey
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         )
                     }
                 },
@@ -1061,7 +1179,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                             isCreatingDialog = false
                         }
                     }) {
-                        Text("Oluştur", color = SpotGreen)
+                        Text("Oluştur", color = SpotGreen, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
@@ -1069,7 +1187,8 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                         Text("İptal", color = TextGrey)
                     }
                 },
-                containerColor = DarkCardSurface
+                containerColor = DarkCardSurface,
+                shape = RoundedCornerShape(18.dp)
             )
         }
     }

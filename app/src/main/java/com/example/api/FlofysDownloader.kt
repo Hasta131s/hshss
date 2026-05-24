@@ -107,7 +107,7 @@ object FlofysDownloader {
         val list = mutableListOf<JSONObject>()
         try {
             val contents = root.optJSONObject("contents") ?: return list
-            val twoColumnSearchResultRenderer = contents.optJSONObject("twoColumnSearchResultRenderer") ?: return list
+            val twoColumnSearchResultRenderer = contents.optJSONObject("twoColumnSearchResultsRenderer") ?: return list
             val primaryContents = twoColumnSearchResultRenderer.optJSONObject("primaryContents") ?: return list
             val sectionListRenderer = primaryContents.optJSONObject("sectionListRenderer") ?: return list
             val secContents = sectionListRenderer.optJSONArray("contents") ?: return list
