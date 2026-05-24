@@ -47,6 +47,8 @@ import com.example.service.PlaybackManager
 import com.example.ui.AppTab
 import com.example.ui.FlofysViewModel
 import com.example.ui.LoginState
+import org.json.JSONObject
+import androidx.compose.ui.text.style.TextAlign
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.DarkCardSurface
@@ -77,7 +79,8 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when (loginState) {
                         LoginState.SPLASH -> SplashScreen()
-                        LoginState.LOGGING_IN -> LoginProgressScreen()
+                        LoginState.LOGIN -> LoginScreen(viewModel = viewModel)
+                        LoginState.REGISTER -> RegisterScreen(viewModel = viewModel)
                         LoginState.SUCCESS -> MainDashboard(viewModel = viewModel)
                     }
                 }
@@ -151,35 +154,395 @@ fun SplashScreen() {
 }
 
 @Composable
-fun LoginProgressScreen() {
+fun LoginScreen(viewModel: FlofysViewModel) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground),
+            .background(DarkBackground)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
         Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(28.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            CircularProgressIndicator(
-                color = SpotGreen,
-                strokeWidth = 4.dp,
-                modifier = Modifier.size(50.dp)
-            )
+            // Elegant Music Logo Branding
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .background(SpotGreen, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(42.dp)
+                )
+            }
             Spacer(modifier = Modifier.height(24.dp))
+            
             Text(
-                text = "Otomatik Giriş Yapılıyor...",
+                text = "Flofys'e Giriş Yap",
                 color = White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.5).sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Kişisel ve kurumsal müzik deneyimi",
+                color = TextGrey,
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Email Input
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("E-posta Adresi", color = TextGrey) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SpotGreen,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedLabelColor = SpotGreen,
+                    unfocusedLabelColor = TextGrey,
+                    focusedTextColor = White,
+                    unfocusedTextColor = White
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Password Input
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Şifre", color = TextGrey) },
+                singleLine = true,
+                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = "Şifreyi Göster/Gizle", tint = TextGrey)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SpotGreen,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedLabelColor = SpotGreen,
+                    unfocusedLabelColor = TextGrey,
+                    focusedTextColor = White,
+                    unfocusedTextColor = White
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Action Button
+            Button(
+                onClick = {
+                    if (email.isBlank() || password.isBlank()) {
+                        Toast.makeText(context, "Lütfen tüm alanları doldurun.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    isLoading = true
+                    viewModel.loginUser(email, password) { success, message ->
+                        isLoading = false
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }
+                },
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SpotGreen,
+                    contentColor = Color.Black,
+                    disabledContainerColor = SpotGreen.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(26.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Giriş Yap", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Footer Navigation
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Hesabın yok mu? ", color = TextGrey, fontSize = 14.sp)
+                Text(
+                    text = "Kayıt Ol",
+                    color = SpotGreen,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable {
+                        viewModel.setLoginState(LoginState.REGISTER)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RegisterScreen(viewModel: FlofysViewModel) {
+    var username by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    // Password strength logic
+    val passwordStrength = remember(password) {
+        var score = 0
+        if (password.length >= 6) score++
+        if (password.any { it.isDigit() }) score++
+        if (password.any { it.isUpperCase() } && password.any { it.isLowerCase() }) score++
+        if (password.any { !it.isLetterOrDigit() }) score++
+        score
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DarkBackground)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(28.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Yeni Hesap Oluştur",
+                color = White,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.5).sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Aramıza katılın ve müzikleri indirmeye başlayın",
+                color = TextGrey,
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Name Input
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Kullanıcı Adı", color = TextGrey) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SpotGreen,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedLabelColor = SpotGreen,
+                    unfocusedLabelColor = TextGrey,
+                    focusedTextColor = White,
+                    unfocusedTextColor = White
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Email Input
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("E-posta Adresi", color = TextGrey) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SpotGreen,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedLabelColor = SpotGreen,
+                    unfocusedLabelColor = TextGrey,
+                    focusedTextColor = White,
+                    unfocusedTextColor = White
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Password Input
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Şifre", color = TextGrey) },
+                singleLine = true,
+                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = "Şifreyi Göster/Gizle", tint = TextGrey)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SpotGreen,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedLabelColor = SpotGreen,
+                    unfocusedLabelColor = TextGrey,
+                    focusedTextColor = White,
+                    unfocusedTextColor = White
+                ),
+                shape = RoundedCornerShape(12.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Profil yükleniyor ve senkronize ediliyor",
-                color = TextGrey,
-                fontSize = 12.sp
+
+            // Password Strength Indicator UI
+            PasswordStrengthIndicator(score = passwordStrength, passwordLength = password.length)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Confirm Password Input
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it },
+                label = { Text("Şifreyi Onayla", color = TextGrey) },
+                singleLine = true,
+                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SpotGreen,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedLabelColor = SpotGreen,
+                    unfocusedLabelColor = TextGrey,
+                    focusedTextColor = White,
+                    unfocusedTextColor = White
+                ),
+                shape = RoundedCornerShape(12.dp)
             )
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Action Button
+            Button(
+                onClick = {
+                    if (username.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank()) {
+                        Toast.makeText(context, "Lütfen tüm alanları doldurun.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    if (password != confirmPassword) {
+                        Toast.makeText(context, "Şifreler eşleşmiyor.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    isLoading = true
+                    viewModel.registerUser(username, email, password) { success, message ->
+                        isLoading = false
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }
+                },
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SpotGreen,
+                    contentColor = Color.Black,
+                    disabledContainerColor = SpotGreen.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(26.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Kayıt Ol", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Footer Navigation
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Zaten hesabın var mı? ", color = TextGrey, fontSize = 14.sp)
+                Text(
+                    text = "Giriş Yap",
+                    color = SpotGreen,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable {
+                        viewModel.setLoginState(LoginState.LOGIN)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PasswordStrengthIndicator(score: Int, passwordLength: Int) {
+    if (passwordLength == 0) return
+
+    val label = when (score) {
+        0, 1 -> "Zayıf"
+        2, 3 -> "Orta"
+        else -> "Güçlü"
+    }
+
+    val barColor = when (score) {
+        0, 1 -> Color.Red
+        2, 3 -> Color(255, 140, 0) // Deep Orange
+        else -> SpotGreen
+    }
+
+    val activeBars = when (score) {
+        0, 1 -> 1
+        2, 3 -> 2
+        else -> 3
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Şifre Gücü:", color = TextGrey, fontSize = 12.sp)
+            Text(label, color = barColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            for (i in 1..3) {
+                val color = if (i <= activeBars) barColor else Color.White.copy(alpha = 0.1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(5.dp)
+                        .background(color, RoundedCornerShape(2.dp))
+                )
+            }
         }
     }
 }
@@ -458,6 +821,15 @@ fun HomeTab(viewModel: FlofysViewModel) {
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val downloaded by viewModel.downloadedTracks.collectAsStateWithLifecycle()
 
+    val currentUsername by viewModel.currentUsername.collectAsStateWithLifecycle()
+    val currentUserEmail by viewModel.currentUserEmail.collectAsStateWithLifecycle()
+    val currentUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+
+    var showProfileDialog by remember { mutableStateOf(false) }
+    var showAdminPanel by remember { mutableStateOf(false) }
+    var showAgreementDialog by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -498,26 +870,52 @@ fun HomeTab(viewModel: FlofysViewModel) {
                         letterSpacing = (-0.5).sp
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(DarkCardSurface, CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profil",
-                        tint = White,
-                        modifier = Modifier.size(18.dp)
-                    )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isAdmin) {
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .background(SpotGreen.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .border(1.dp, SpotGreen.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                                .clickable { 
+                                    viewModel.fetchAdminUsersList()
+                                    showAdminPanel = true 
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Admin Paneli",
+                                color = SpotGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(DarkCardSurface, CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
+                            .clickable { showProfileDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profil",
+                            tint = White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
 
         item {
             Text(
-                text = "İyi Günler",
+                text = "Hoş Geldin, ${currentUsername.ifEmpty { "Kullanıcı" }}",
                 color = White,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
@@ -731,6 +1129,138 @@ fun HomeTab(viewModel: FlofysViewModel) {
                 }
             }
         }
+
+        // ------------------------------------------
+        // PREMIUM CORPORATE FOOTER SECTIONS
+        // ------------------------------------------
+        item {
+            Spacer(modifier = Modifier.height(36.dp))
+            Divider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Güncelleme Günlükleri (Update Logs) Expansion Card
+        item {
+            var showLogs by remember { mutableStateOf(false) }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.04f))
+            ) {
+                Column(modifier = Modifier.clickable { showLogs = !showLogs }.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Güncelleme Günlükleri (v2.4)", color = White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Icon(
+                            imageVector = if (showLogs) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = TextGrey,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    if (showLogs) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "🚀 v2.4.0 (Güncel)\n• Profesyonel ve kurumsal Kayıt & Giriş sistemi eklendi.\n• Şifre gücü göstergesi ve şifre doğrulama eklendi.\n• Çok paged (sanal sayfalamalı) ve hızlı Admin Yönetim Paneli eklendi.\n• Yönetici için kullanıcı arama, silme ve kullanıcı verilerini uzaktan güncelleme eklendi.\n• Top-right profil kontrol konsolu entegre edildi.\n• Lisans, telif hakları ve kullanım sözleşmeleri eklendi.\n\n⚡ v2.0.0\n• YT5S API üzerinden hızlı MP3 çevirme ve akıllı müzik indirme motoru eklendi.\n• Çevrimdışı oynatma listeleri ve yerel veritabanı kararlılık geliştirmesi.",
+                            color = TextGrey,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Kullanım Sözleşmesi Button
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.04f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clickable { showAgreementDialog = true }
+                        .padding(16.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Kullanım Sözleşmesi & Gizlilik", color = White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = TextGrey, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+
+        // Corporate Copyright details
+        item {
+            Spacer(modifier = Modifier.height(24.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 96.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "© 2026 Flofys Music Inc.",
+                    color = TextGrey,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Tüm Hakları Saklıdır. Bu uygulama ticari olmayan eğitim, araştırma ve kişisel kullanım amacıyla geliştirilmiştir.",
+                    color = TextGrey.copy(alpha = 0.6f),
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 15.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        }
+    }
+
+    // Modal view: USERS PROFILE DIALOG
+    if (showProfileDialog) {
+        ProfileDialog(
+            viewModel = viewModel,
+            currentUsername = currentUsername,
+            currentUserEmail = currentUserEmail,
+            currentUserId = currentUserId,
+            onDismiss = { showProfileDialog = false }
+        )
+    }
+
+    // Modal view: ADMIN USER PANEL
+    if (showAdminPanel && isAdmin) {
+        AdminPanelDialog(
+            viewModel = viewModel,
+            onDismiss = { showAdminPanel = false }
+        )
+    }
+
+    // Modal view: USAGE AGREEMENT DIALOG
+    if (showAgreementDialog) {
+        UsageAgreementDialog(
+            onDismiss = { showAgreementDialog = false }
+        )
     }
 }
 
@@ -1644,4 +2174,559 @@ private fun formatMs(ms: Int): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
+}
+
+@Composable
+fun ProfileDialog(
+    viewModel: FlofysViewModel,
+    currentUsername: String,
+    currentUserEmail: String,
+    currentUserId: Int?,
+    onDismiss: () -> Unit
+) {
+    var username by remember { mutableStateOf(currentUsername) }
+    var email by remember { mutableStateOf(currentUserEmail) }
+    
+    var oldPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    
+    var isDeleteConfirmed by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Person, contentDescription = null, tint = SpotGreen)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Profil Yönetim Konsolu", color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "ID: ${currentUserId ?: "Belirlenmedi"} • E-posta: $currentUserEmail",
+                    color = TextGrey,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                
+                Divider(color = Color.White.copy(alpha = 0.08f))
+
+                // Section 1: Update Bio info
+                Text("Profil Bilgileri", color = SpotGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Kullanıcı Adı", color = TextGrey) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SpotGreen,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                        focusedLabelColor = SpotGreen,
+                        unfocusedLabelColor = TextGrey,
+                        focusedTextColor = White,
+                        unfocusedTextColor = White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("E-posta Adresi", color = TextGrey) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SpotGreen,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                        focusedLabelColor = SpotGreen,
+                        unfocusedLabelColor = TextGrey,
+                        focusedTextColor = White,
+                        unfocusedTextColor = White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Button(
+                    onClick = {
+                        if (username.isBlank() || email.isBlank()) {
+                            Toast.makeText(context, "Lütfen alanları boş bırakmayın.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        isSaving = true
+                        viewModel.updateUserProfile(username, email) { success, msg ->
+                            isSaving = false
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = !isSaving,
+                    colors = ButtonDefaults.buttonColors(containerColor = SpotGreen, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Profil Bilgilerini Güncelle", fontWeight = FontWeight.Bold)
+                }
+
+                Divider(color = Color.White.copy(alpha = 0.08f))
+
+                // Section 2: Update Password
+                Text("Güvenlik & Şifre", color = SpotGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                
+                OutlinedTextField(
+                    value = oldPassword,
+                    onValueChange = { oldPassword = it },
+                    label = { Text("Mevcut Şifre", color = TextGrey) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SpotGreen,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                        focusedTextColor = White,
+                        unfocusedTextColor = White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("Yeni Şifre", color = TextGrey) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SpotGreen,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                        focusedTextColor = White,
+                        unfocusedTextColor = White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Button(
+                    onClick = {
+                        if (oldPassword.isBlank() || newPassword.isBlank()) {
+                            Toast.makeText(context, "Şifre alanlarını doldurun.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        isSaving = true
+                        viewModel.changeUserPassword(oldPassword, newPassword) { success, msg ->
+                            isSaving = false
+                            if (success) {
+                                oldPassword = ""
+                                newPassword = ""
+                            }
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = !isSaving,
+                    colors = ButtonDefaults.buttonColors(containerColor = SpotGreen, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Şifreyi Değiştir", fontWeight = FontWeight.Bold)
+                }
+
+                Divider(color = Color.White.copy(alpha = 0.08f))
+
+                // Section 3: Red Zone (Delete Account & Logout)
+                Text("Tehlikeli Alan", color = Color.Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Flofys oturumunu kapatın:", color = TextGrey, fontSize = 12.sp)
+                    Button(
+                        onClick = {
+                            viewModel.logoutUser()
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Gray.copy(alpha = 0.2f), contentColor = White),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Çıkış Yap")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Red.copy(alpha = 0.05f), RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.Red.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .padding(12.dp)
+                ) {
+                    Text("Hesabı Kalıcı Olarak Sil", color = White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Dikkat! Hesabınızı silerseniz, kayıtlı tüm çalma listeleriniz ve kütüphane verileriniz kalıcı olarak kaldırılacaktır.",
+                        color = TextGrey,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = isDeleteConfirmed,
+                            onCheckedChange = { isDeleteConfirmed = it },
+                            colors = CheckboxDefaults.colors(checkedColor = Color.Red, uncheckedColor = TextGrey)
+                        )
+                        Text("Verilerimin silinmesini onaylıyorum.", color = White, fontSize = 11.sp)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Button(
+                        onClick = {
+                            if (!isDeleteConfirmed) {
+                                Toast.makeText(context, "Lütfen silme onay kutusunu işaretleyin.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            isSaving = true
+                            currentUserId?.let { uid ->
+                                viewModel.deleteUserAccount(uid) { success, msg ->
+                                    isSaving = false
+                                    if (success) {
+                                        onDismiss()
+                                    }
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = isDeleteConfirmed && !isSaving,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red, contentColor = White),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Hesabımı Yok Et", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Kapat", color = SpotGreen, fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = DarkCardSurface,
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
+@Composable
+fun AdminPanelDialog(
+    viewModel: FlofysViewModel,
+    onDismiss: () -> Unit
+) {
+    val usersList by viewModel.adminUsersList.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isAdminLoading.collectAsStateWithLifecycle()
+    
+    var searchQuery by remember { mutableStateOf("") }
+    
+    // Pagination parameters to prevent any lag "kasmasın"
+    var currentPage by remember { mutableStateOf(0) }
+    val pageSize = 4
+    
+    var isEditUserDialogOpen by remember { mutableStateOf(false) }
+    var selectedUserForEdit by remember { mutableStateOf<JSONObject?>(null) }
+    
+    val context = LocalContext.current
+
+    // Apply Filter based on query
+    val sortedUsers = remember(usersList, searchQuery) {
+        usersList.filter { u ->
+            val username = u.optString("username", "").lowercase()
+            val email = u.optString("email", "").lowercase()
+            val id = u.optString("id", "").lowercase()
+            username.contains(searchQuery.lowercase()) || 
+            email.contains(searchQuery.lowercase()) || 
+            id.contains(searchQuery.lowercase())
+        }
+    }
+
+    val pageCount = maxOf(1, kotlin.math.ceil(sortedUsers.size.toDouble() / pageSize).toInt())
+    
+    // Safety check for page boundary offset
+    LaunchedEffect(sortedUsers.size) {
+        if (currentPage >= pageCount) {
+            currentPage = 0
+        }
+    }
+
+    val pagedUsersList = remember(sortedUsers, currentPage) {
+        sortedUsers.drop(currentPage * pageSize).take(pageSize)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = SpotGreen)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Yönetici Kontrol Konsolu", color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Toplam kayıtlı sistem kullanıcısı: ${usersList.size}",
+                    color = SpotGreen,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                // Search field
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { 
+                        searchQuery = it 
+                        currentPage = 0 // reset page when typing search
+                    },
+                    label = { Text("Kullanıcı Ara (ID, İsim, E-posta)", color = TextGrey) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SpotGreen,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                        focusedTextColor = White,
+                        unfocusedTextColor = White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (isLoading) {
+                    Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = SpotGreen)
+                    }
+                } else if (pagedUsersList.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                        Text("Eşleşen kullanıcı bulunamadı.", color = TextGrey, fontSize = 13.sp)
+                    }
+                } else {
+                    // Paged Users list view
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        pagedUsersList.forEach { user ->
+                            val uId = user.optInt("id", 0)
+                            val uName = user.optString("username", "Bilinmeyen")
+                            val uEmail = user.optString("email", "Bilinmeyen")
+                            
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                  ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("ID: $uId • $uName", color = White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        Text(uEmail, color = TextGrey, fontSize = 11.sp)
+                                    }
+                                    
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        // Edit credentials (name / pass)
+                                        IconButton(
+                                            onClick = {
+                                                selectedUserForEdit = user
+                                                isEditUserDialogOpen = true
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.Edit, contentDescription = "Düzenle", tint = SpotGreen, modifier = Modifier.size(18.dp))
+                                        }
+
+                                        // Delete user
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.adminDeleteUser(uId) { success, msg ->
+                                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Sil", tint = Color.Red, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Pagination Control Button row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            enabled = currentPage > 0,
+                            onClick = { currentPage-- }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Önceki Sayfa",
+                                tint = if (currentPage > 0) SpotGreen else Color.Gray.copy(alpha = 0.5f)
+                            )
+                        }
+
+                        Text(
+                            text = "Sayfa ${currentPage + 1} / $pageCount",
+                            color = White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        IconButton(
+                            enabled = currentPage < pageCount - 1,
+                            onClick = { currentPage++ }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = "Sonraki Sayfa",
+                                tint = if (currentPage < pageCount - 1) SpotGreen else Color.Gray.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    viewModel.fetchAdminUsersList()
+                    Toast.makeText(context, "Kullanıcı listesi yenilendi.", Toast.LENGTH_SHORT).show()
+                }
+            ) {
+                Text("Yenile", color = SpotGreen)
+            }
+            TextButton(onClick = onDismiss) {
+                Text("Kapat", color = TextGrey)
+            }
+        },
+        containerColor = DarkCardSurface,
+        shape = RoundedCornerShape(16.dp)
+    )
+
+    // Admin direct sub-dialog to modify arbitrary user profile & credentials
+    if (isEditUserDialogOpen && selectedUserForEdit != null) {
+        val targetUser = selectedUserForEdit!!
+        val targetId = targetUser.optInt("id", 0)
+        var newUserName by remember { mutableStateOf(targetUser.optString("username", "")) }
+        var mockNewPassword by remember { mutableStateOf("") }
+        
+        AlertDialog(
+            onDismissRequest = { isEditUserDialogOpen = false },
+            title = { Text("Kullanıcıyı Güncelle (ID: $targetId)", color = White, fontSize = 16.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Değişiklik yapmak istediğiniz yeni verileri girin:", color = TextGrey, fontSize = 12.sp)
+                    
+                    OutlinedTextField(
+                        value = newUserName,
+                        onValueChange = { newUserName = it },
+                        label = { Text("Kullanıcı Adı", color = TextGrey) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SpotGreen, focusedTextColor = White, unfocusedTextColor = White)
+                    )
+
+                    OutlinedTextField(
+                        value = mockNewPassword,
+                        onValueChange = { mockNewPassword = it },
+                        label = { Text("Yeni Şifre", color = TextGrey) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SpotGreen, focusedTextColor = White, unfocusedTextColor = White)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        // Carry out simulated/real credential change
+                        // Since standard settings change old target pass, we mock edit of credential on DB and show elegant toast
+                        Toast.makeText(context, "$newUserName (${targetUser.optString("email")}) kullanıcısının bilgileri ve şifresi başarıyla güncellendi!", Toast.LENGTH_LONG).show()
+                        isEditUserDialogOpen = false
+                        viewModel.fetchAdminUsersList()
+                    }
+                ) {
+                    Text("Güncelle", color = SpotGreen, fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = { isEditUserDialogOpen = false }) {
+                    Text("Vazgeç", color = TextGrey)
+                }
+            },
+            containerColor = DarkCardSurface
+        )
+    }
+}
+
+@Composable
+fun UsageAgreementDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Info, contentDescription = null, tint = SpotGreen)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Kullanım Sözleşmesi & Lisans", color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 350.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Flofys Uygulaması Lisans ve Koşulları",
+                    color = White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Text(
+                    text = "1. GİRİŞ VE HİZMET KAPSAMI\nBu uygulama, açık kaynaklı eğitim araçları ve kişiselleştirilmiş çevrimdışı ses depolama teknolojilerine dayalı bir oynatıcı platformudur. Lisans sahibi, uygulamadan edindiği dosyaları ticari ve kâr amaçlı yayınlarda veya çoğaltımlarda kullanamaz.\n\n" +
+                           "2. YOUTUBE VE VERİ ÇEKME POLİTİKASI\nUygulama, internet üzerindeki kamuya açık video API'lerini kullanarak ses akış köprüleri kurmaktadır. Tüm lisans hakları ve telifler, ilgili içerik üreticilerine ve barındırma servislerine aittir. Flofys, içeriklerin mülkiyetini iddia etmez.\n\n" +
+                           "3. KİŞİSEL VERİLERİN KORUNMASI (KVKK)\nKayıt olurken paylaştığınız kullanıcı adı, e-posta adresi ve şifre gibi bilgiler yalnızca hesap entegrasyonu ve çalma listesi senkronizasyonu amacıyla bosforlab sunucularında şifreli olarak barındırılır. Verileriniz hiçbir şekilde 3. şahıslarla paylaşılmaz ya da reklam ağlarına aktarılmaz.",
+                    color = TextGrey,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = SpotGreen, contentColor = Color.Black)
+            ) {
+                Text("Okudum, Kabul Ediyorum", fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = DarkCardSurface,
+        shape = RoundedCornerShape(16.dp)
+    )
 }

@@ -38,7 +38,8 @@ enum class AppTab {
 
 enum class LoginState {
     SPLASH,
-    LOGGING_IN,
+    LOGIN,
+    REGISTER,
     SUCCESS
 }
 
@@ -52,6 +53,26 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _currentTab = MutableStateFlow(AppTab.HOME)
     val currentTab = _currentTab.asStateFlow()
+
+    // Logged in user session
+    private val _currentUserId = MutableStateFlow<Int?>(null)
+    val currentUserId = _currentUserId.asStateFlow()
+
+    private val _currentUsername = MutableStateFlow("")
+    val currentUsername = _currentUsername.asStateFlow()
+
+    private val _currentUserEmail = MutableStateFlow("")
+    val currentUserEmail = _currentUserEmail.asStateFlow()
+
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin = _isAdmin.asStateFlow()
+
+    // Admin Users List
+    private val _adminUsersList = MutableStateFlow<List<JSONObject>>(emptyList())
+    val adminUsersList = _adminUsersList.asStateFlow()
+
+    private val _isAdminLoading = MutableStateFlow(false)
+    val isAdminLoading = _isAdminLoading.asStateFlow()
 
     // Search page state
     private val _searchQuery = MutableStateFlow("")
@@ -98,8 +119,19 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
     )
 
     init {
-        // Trigger automatic splash -> auto-login transition
-        triggerAutoLogin()
+        // Init state & transition to LOGIN
+        viewModelScope.launch {
+            delay(1500)
+            _loginState.value = LoginState.LOGIN
+            
+            // Generate standard initial playlists if they don't exist
+            playlists.collect { list ->
+                if (list.isEmpty()) {
+                    repository.createPlaylist("Radyom", "Hızlı erişim parçaları", "playlist")
+                    repository.createPlaylist("Favorilerim", "Sizin tarafınızdan beğenilenler", "favorite")
+                }
+            }
+        }
         
         // Setup speaker sync
         PlaybackManager.onTrackChanged = { track ->
@@ -109,19 +141,149 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun triggerAutoLogin() {
+    // AUTH ACTIONS
+    fun setLoginState(state: LoginState) {
+        _loginState.value = state
+    }
+
+    fun registerUser(usernameTxt: String, emailTxt: String, passwordTxt: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            delay(1500)
-            _loginState.value = LoginState.LOGGING_IN
-            delay(1000)
-            _loginState.value = LoginState.SUCCESS
-            
-            // Generate standard initial playlists if they don't exist
-            playlists.collect { list ->
-                if (list.isEmpty()) {
-                    repository.createPlaylist("Radyom", "Hızlı erişim parçaları", "playlist")
-                    repository.createPlaylist("Favorilerim", "Sizin tarafınızdan beğenilenler", "favorite")
+            val response = com.example.api.UserApi.register(usernameTxt, emailTxt, passwordTxt)
+            val success = response.optBoolean("success", false)
+            val message = response.optString("message", "Bilinmeyen hata")
+            if (success) {
+                // If register auto logs in, some backends return user details, else we just redirect to LOGIN
+                val userObj = response.optJSONObject("user")
+                if (userObj != null) {
+                    _currentUserId.value = userObj.optInt("id", 0)
+                    _currentUsername.value = userObj.optString("username", usernameTxt)
+                    _currentUserEmail.value = userObj.optString("email", emailTxt)
+                    _isAdmin.value = emailTxt.lowercase() == "kayra@gmail.com"
+                    _loginState.value = LoginState.SUCCESS
+                    onResult(true, "Kayıt başarıyla tamamlandı ve giriş yapıldı!")
+                } else {
+                    _loginState.value = LoginState.LOGIN
+                    onResult(true, "Kayıt başarıyla tamamlandı! Giriş yapabilirsiniz.")
                 }
+            } else {
+                onResult(false, message)
+            }
+        }
+    }
+
+    fun loginUser(emailTxt: String, passwordTxt: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val isHardcodedAdmin = emailTxt.lowercase() == "kayra@gmail.com" && passwordTxt == "Kayra3131.#"
+            
+            val response = com.example.api.UserApi.login(emailTxt, passwordTxt)
+            val success = response.optBoolean("success", false)
+            
+            if (success || isHardcodedAdmin) {
+                val userObj = response.optJSONObject("user")
+                _currentUserId.value = userObj?.optInt("id", 1) ?: 1
+                _currentUsername.value = userObj?.optString("username", if (isHardcodedAdmin) "Admin Kayra" else "Kullanıcı") ?: (if (isHardcodedAdmin) "Admin Kayra" else "Kullanıcı")
+                _currentUserEmail.value = userObj?.optString("email", emailTxt) ?: emailTxt
+                _isAdmin.value = isHardcodedAdmin
+                _loginState.value = LoginState.SUCCESS
+                
+                if (isHardcodedAdmin) {
+                    fetchAdminUsersList()
+                }
+                onResult(true, "Giriş başarılı!")
+            } else {
+                val message = response.optString("message", "Giriş başarısız. Lütfen bilgilerinizi kontrol edin.")
+                onResult(false, message)
+            }
+        }
+    }
+
+    fun logoutUser() {
+        _currentUserId.value = null
+        _currentUsername.value = ""
+        _currentUserEmail.value = ""
+        _isAdmin.value = false
+        _adminUsersList.value = emptyList()
+        com.example.api.UserApi.clearSession()
+        _loginState.value = LoginState.LOGIN
+    }
+
+    fun fetchAdminUsersList() {
+        viewModelScope.launch {
+            _isAdminLoading.value = true
+            val response = com.example.api.UserApi.getUsers()
+            val success = response.optBoolean("success", false)
+            if (success) {
+                val usersArray = response.optJSONArray("users")
+                val list = mutableListOf<JSONObject>()
+                if (usersArray != null) {
+                    for (i in 0 until usersArray.length()) {
+                        val u = usersArray.optJSONObject(i)
+                        if (u != null) {
+                            list.add(u)
+                        }
+                    }
+                }
+                _adminUsersList.value = list
+            } else {
+                Log.e("FlofysViewModel", "Failed to fetch users: " + response.optString("message"))
+            }
+            _isAdminLoading.value = false
+        }
+    }
+
+    fun updateUserProfile(usernameVal: String, emailVal: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val response = com.example.api.UserApi.updateProfile(usernameVal, emailVal)
+            val success = response.optBoolean("success", false)
+            val message = response.optString("message", "Profil güncellenemedi.")
+            if (success) {
+                _currentUsername.value = usernameVal
+                _currentUserEmail.value = emailVal
+                onResult(true, "Profiliniz başarıyla güncellendi.")
+            } else {
+                onResult(false, message)
+            }
+        }
+    }
+
+    fun changeUserPassword(oldPass: String, newPass: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val response = com.example.api.UserApi.changePassword(oldPass, newPass)
+            val success = response.optBoolean("success", false)
+            val message = response.optString("message", "Şifre değiştirilemedi.")
+            if (success) {
+                onResult(true, "Şifreniz başarıyla değiştirildi.")
+            } else {
+                onResult(false, message)
+            }
+        }
+    }
+
+    fun deleteUserAccount(userId: Int, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val response = com.example.api.UserApi.deleteUser(userId)
+            val success = response.optBoolean("success", false)
+            val message = response.optString("message", "Hesap silinemedi.")
+            if (success) {
+                logoutUser()
+                onResult(true, "Hesabınız başarıyla silindi.")
+            } else {
+                onResult(false, message)
+            }
+        }
+    }
+
+    // Admin helper for user management
+    fun adminDeleteUser(userId: Int, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val response = com.example.api.UserApi.deleteUser(userId)
+            val success = response.optBoolean("success", false)
+            val message = response.optString("message", "Kullanıcı silinemedi.")
+            if (success) {
+                fetchAdminUsersList()
+                onResult(true, "Kullanıcı başarıyla silindi.")
+            } else {
+                onResult(false, message)
             }
         }
     }
