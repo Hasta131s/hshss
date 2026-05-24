@@ -95,9 +95,6 @@ class MainActivity : ComponentActivity() {
                 permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
-        }
 
         if (permissionsNeeded.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), 101)
@@ -649,47 +646,7 @@ fun MainDashboard(viewModel: FlofysViewModel) {
                 AppTab.DOWNLOADER -> DownloaderTab(viewModel = viewModel)
             }
 
-            // Interactive Speech Mic floating widget in main screen for voice command support
-            val isListeningVoice by viewModel.isListeningVoice.collectAsStateWithLifecycle()
-            val voiceCommandResult by viewModel.voiceCommandResult.collectAsStateWithLifecycle()
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.End) {
-                    if (voiceCommandResult.isNotEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = DarkCardSurface,
-                            modifier = Modifier
-                                .padding(bottom = 8.dp)
-                                .widthIn(max = 200.dp)
-                                .border(1.dp, SpotGreen, RoundedCornerShape(8.dp))
-                        ) {
-                            Text(
-                                text = voiceCommandResult,
-                                color = White,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                        }
-                    }
-                    FloatingActionButton(
-                        onClick = { viewModel.startSpeechRecognition() },
-                        containerColor = if (isListeningVoice) Color.Red else SpotGreen,
-                        contentColor = Color.Black,
-                        shape = CircleShape,
-                        modifier = Modifier.size(56.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Sesli Kontrol Ses Dinleyici"
-                        )
-                    }
-                }
-            }
 
             // Expanding Full Active Screen Player with horizontal transitions
             AnimatedVisibility(
@@ -1874,7 +1831,8 @@ fun FullPlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Dismiss arrow and screen title
@@ -1900,7 +1858,7 @@ fun FullPlayerScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.2f))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Cover Album Art Image
             Box(
@@ -1918,7 +1876,7 @@ fun FullPlayerScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.weight(0.2f))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Metadata: title and author channel
             Row(
@@ -1989,7 +1947,7 @@ fun FullPlayerScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.weight(0.2f))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Music actions layout: Row centering Play buttons
             Row(
@@ -2079,7 +2037,7 @@ fun FullPlayerScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.1f))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Small active active indicator status of loop
             Text(
