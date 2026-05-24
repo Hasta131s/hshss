@@ -40,6 +40,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -687,9 +690,9 @@ fun MiniPlayerRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
             .clickable { onClicked() },
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF131315)),
         border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.12f))
     ) {
@@ -697,7 +700,7 @@ fun MiniPlayerRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
@@ -705,83 +708,69 @@ fun MiniPlayerRow(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(54.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .border(1.2.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.2.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
                         text = track.title,
                         color = White,
-                        fontSize = 14.5.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = track.author,
                         color = TextGrey,
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
                 
-                // Skip Previous
-                IconButton(
-                    onClick = { PlaybackManager.skipToPrevious(context) },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(Color.White.copy(alpha = 0.04f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Önceki",
-                        tint = White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 
                 if (isBuffering) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .background(Color.White.copy(alpha = 0.04f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
                             color = SpotGreen,
                             strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
                 } else {
                     IconButton(
                         onClick = { PlaybackManager.togglePlayPause(context) },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .background(Color.White.copy(alpha = 0.04f), CircleShape)
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Oynat/Durdur",
                             tint = SpotGreen,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
                 }
+                
+                Spacer(modifier = Modifier.width(6.dp))
 
                 IconButton(
                     onClick = { PlaybackManager.skipToNext(context) },
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(36.dp)
                         .background(Color.White.copy(alpha = 0.04f), CircleShape)
                 ) {
                     Icon(
@@ -2180,15 +2169,14 @@ fun FullPlayerScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Cover Album Art Image - Square Frame
+            // Cover Album Art Image - Rounded Soft elevated Frame
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.65f)
+                    .fillMaxWidth(0.82f)
                     .aspectRatio(1f)
-                    .border(3.dp, SpotGreen, RoundedCornerShape(8.dp))
-                    .padding(4.dp)
-                    .clip(RoundedCornerShape(0.dp)) // sharp square corner inside the frame
-                    .background(Color.Black)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF141416))
+                    .border(1.5.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
             ) {
                 AsyncImage(
                     model = currentTrack.thumbnailUrl,
@@ -2198,200 +2186,269 @@ fun FullPlayerScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Metadata: title and author channel (Ensuring title does NOT enter the cover under any circumstance)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = currentTrack.title,
                         color = White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
                         letterSpacing = (-0.5).sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = currentTrack.author,
-                        color = TextGrey,
-                        fontSize = 14.sp,
+                        color = SpotGreen,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = { viewModel.startTrackDownload(currentTrack) }) {
+                IconButton(
+                    onClick = { viewModel.startTrackDownload(currentTrack) },
+                    modifier = Modifier
+                        .background(Color.White.copy(alpha = 0.04f), CircleShape)
+                        .size(42.dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = if (currentTrack.isDownloaded) Icons.Default.CheckCircle else Icons.Default.Check,
                         contentDescription = "İndir",
-                        tint = if (currentTrack.isDownloaded) SpotGreen else White.copy(alpha = 0.5f),
-                        modifier = Modifier.size(24.dp)
+                        tint = if (currentTrack.isDownloaded) SpotGreen else White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Compact Elegant Controls Hub with Custom Glassmorphism Overlay
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = Color.White.copy(alpha = 0.04f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val currentProgressValue = sliderDraggingValue ?: progress
-                    val currentDisplayPosMs = if (sliderDraggingValue != null) (sliderDraggingValue!! * durMs).toInt() else posMs
+            val currentProgressValue = sliderDraggingValue ?: progress
+            val currentDisplayPosMs = if (sliderDraggingValue != null) (sliderDraggingValue!! * durMs).toInt() else posMs
 
-                    // Progress Slider
-                    Slider(
-                        value = currentProgressValue,
-                        onValueChange = { percent ->
-                            sliderDraggingValue = percent
-                        },
-                        onValueChangeFinished = {
-                            val targetMilli = ((sliderDraggingValue ?: progress) * durMs).toInt()
+            // GORGEOUS CUSTOM SEEK BAR (Sleek, fluid, and modern Material 3 design)
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .height(20.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures { offset ->
+                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                            sliderDraggingValue = fraction
+                            val targetMilli = (fraction * durMs).toInt()
                             PlaybackManager.seekTo(targetMilli)
                             sliderDraggingValue = null
-                        },
-                        colors = SliderDefaults.colors(
-                            thumbColor = SpotGreen,
-                            activeTrackColor = SpotGreen,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Duration and Position labels
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = formatMs(currentDisplayPosMs),
-                            color = TextGrey,
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = formatMs(durMs),
-                            color = TextGrey,
-                            fontSize = 11.sp
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Music actions layout: Row centering Play buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        // Loop mode toggle
-                        IconButton(onClick = {
-                            val nextLoop = when (loopMode) {
-                                LoopMode.NONE -> LoopMode.REPEAT_ONE
-                                LoopMode.REPEAT_ONE -> LoopMode.REPEAT_ALL
-                                LoopMode.REPEAT_ALL -> LoopMode.NONE
-                            }
-                            PlaybackManager.setLoopMode(nextLoop)
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Loop",
-                                tint = if (loopMode != LoopMode.NONE) SpotGreen else White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        IconButton(onClick = { PlaybackManager.skipToPrevious(context) }) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = White, modifier = Modifier.size(32.dp))
-                        }
-
-                        // Mini progress loading inside Main Button
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(White, CircleShape)
-                                .clickable { PlaybackManager.togglePlayPause(context) }
-                        ) {
-                            if (isBuffering) {
-                                CircularProgressIndicator(
-                                    color = Color.Black,
-                                    strokeWidth = 2.5.dp,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "PlayPause",
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-                        }
-
-                        IconButton(onClick = { PlaybackManager.skipToNext(context) }) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = White, modifier = Modifier.size(32.dp))
-                        }
-
-                        // Quick visual queue checker toggle
-                        IconButton(onClick = { expandedQueueState = !expandedQueueState }) {
-                            Icon(
-                                imageVector = Icons.Default.List,
-                                contentDescription = "Queue List",
-                                tint = if (expandedQueueState) SpotGreen else White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(22.dp)
-                            )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Additional rewind forward actions
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { PlaybackManager.rewind10s() }) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "-10s", tint = TextGrey, modifier = Modifier.size(16.dp))
-                                Text("10s-", color = TextGrey, fontSize = 10.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(28.dp))
-                        Text(
-                            text = when (loopMode) {
-                                LoopMode.NONE -> "Döngü Modu Kapalı"
-                                LoopMode.REPEAT_ONE -> "Tekrar: Tek Parça"
-                                LoopMode.REPEAT_ALL -> "Tekrar: Tümü"
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { },
+                            onDragEnd = {
+                                val targetMilli = ((sliderDraggingValue ?: progress) * durMs).toInt()
+                                PlaybackManager.seekTo(targetMilli)
+                                sliderDraggingValue = null
                             },
-                            color = SpotGreen.copy(alpha = 0.9f),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(28.dp))
-                        IconButton(onClick = { PlaybackManager.forward10s() }) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("10s+", color = TextGrey, fontSize = 10.sp)
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "10s+", tint = TextGrey, modifier = Modifier.size(16.dp))
+                            onDragCancel = {
+                                sliderDraggingValue = null
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val newX = change.position.x
+                                val fraction = (newX / size.width).coerceIn(0f, 1f)
+                                sliderDraggingValue = fraction
                             }
+                        )
+                    }
+            ) {
+                val activeWidthDp = maxWidth * currentProgressValue
+
+                // Track Background
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .align(Alignment.Center)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f))
+                )
+
+                // Active Highlight Track
+                Box(
+                    modifier = Modifier
+                        .width(activeWidthDp)
+                        .height(4.dp)
+                        .align(Alignment.CenterStart)
+                        .clip(CircleShape)
+                        .background(SpotGreen)
+                )
+
+                // Thumb Button dot
+                Box(
+                    modifier = Modifier
+                        .offset(x = activeWidthDp - 7.dp)
+                        .size(14.dp)
+                        .align(Alignment.CenterStart)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(2.dp, SpotGreen, CircleShape)
+                )
+            }
+
+            // Duration labels
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = formatMs(currentDisplayPosMs),
+                    color = TextGrey,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = formatMs(durMs),
+                    color = TextGrey,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Playback controls layout
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(
+                    onClick = {
+                        val nextLoop = when (loopMode) {
+                            LoopMode.NONE -> LoopMode.REPEAT_ONE
+                            LoopMode.REPEAT_ONE -> LoopMode.REPEAT_ALL
+                            LoopMode.REPEAT_ALL -> LoopMode.NONE
                         }
+                        PlaybackManager.setLoopMode(nextLoop)
+                    },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Loop",
+                        tint = if (loopMode != LoopMode.NONE) SpotGreen else White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { PlaybackManager.skipToPrevious(context) },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.White.copy(alpha = 0.04f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Prev",
+                        tint = White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(SpotGreen, CircleShape)
+                        .clickable { PlaybackManager.togglePlayPause(context) }
+                ) {
+                    if (isBuffering) {
+                        CircularProgressIndicator(
+                            color = Color.Black,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Oynat Durdur",
+                            tint = Color.Black,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = { PlaybackManager.skipToNext(context) },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.White.copy(alpha = 0.04f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = "Next",
+                        tint = White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { expandedQueueState = !expandedQueueState },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.List,
+                        contentDescription = "Queue List",
+                        tint = if (expandedQueueState) SpotGreen else White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { PlaybackManager.rewind10s() }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "-10s", tint = TextGrey, modifier = Modifier.size(16.dp))
+                        Text("10s-", color = TextGrey, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                Spacer(modifier = Modifier.width(32.dp))
+                Text(
+                    text = when (loopMode) {
+                        LoopMode.NONE -> "Döngü Kapalı"
+                        LoopMode.REPEAT_ONE -> "Tekrar: Tek Parça"
+                        LoopMode.REPEAT_ALL -> "Tekrar: Tümü"
+                    },
+                    color = SpotGreen.copy(alpha = 0.9f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(32.dp))
+                IconButton(onClick = { PlaybackManager.forward10s() }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("10s+", color = TextGrey, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "10s+", tint = TextGrey, modifier = Modifier.size(16.dp))
                     }
                 }
             }
