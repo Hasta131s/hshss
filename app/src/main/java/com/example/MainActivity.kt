@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -787,6 +788,12 @@ fun HomeTab(viewModel: FlofysViewModel) {
     var showAdminPanel by remember { mutableStateOf(false) }
     var showAgreementDialog by remember { mutableStateOf(false) }
 
+    // Download paging state
+    var showAllDownloadsDialog by remember { mutableStateOf(false) }
+    var downloadsSearchQuery by remember { mutableStateOf("") }
+    var downloadsCurrentPage by remember { mutableStateOf(1) }
+    val itemsPerPage = 10
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1022,13 +1029,29 @@ fun HomeTab(viewModel: FlofysViewModel) {
 
         // Downloaded items count tile
         item {
-            Text(
-                text = "İndirilen Parçalar",
-                color = White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "İndirilen Parçalar",
+                    color = White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (downloaded.size > 2) {
+                    TextButton(onClick = {
+                        downloadsSearchQuery = ""
+                        downloadsCurrentPage = 1
+                        showAllDownloadsDialog = true
+                    }) {
+                        Text("Tümünü Gör", color = SpotGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
 
         if (downloaded.isEmpty()) {
@@ -1055,7 +1078,8 @@ fun HomeTab(viewModel: FlofysViewModel) {
                 }
             }
         } else {
-            items(downloaded) { track ->
+            // Display max 2 downloaded tracks inside list
+            items(downloaded.take(2)) { track ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1218,6 +1242,203 @@ fun HomeTab(viewModel: FlofysViewModel) {
         UsageAgreementDialog(
             onDismiss = { showAgreementDialog = false }
         )
+    }
+
+    // Modal view: ALL DOWNLOADED TRACKS WITH SEARCH AND PAGINATION
+    if (showAllDownloadsDialog) {
+        val filteredDownloads = downloaded.filter {
+            it.title.contains(downloadsSearchQuery, ignoreCase = true) ||
+            it.author.contains(downloadsSearchQuery, ignoreCase = true)
+        }
+        val totalItems = filteredDownloads.size
+        val totalPages = maxOf(1, (totalItems + itemsPerPage - 1) / itemsPerPage)
+        
+        // Ensure page index remains within range
+        if (downloadsCurrentPage > totalPages) {
+            downloadsCurrentPage = totalPages
+        }
+        val startIndex = (downloadsCurrentPage - 1) * itemsPerPage
+        val endIndex = minOf(startIndex + itemsPerPage, totalItems)
+        val paginatedList = if (startIndex < totalItems) {
+            filteredDownloads.subList(startIndex, endIndex)
+        } else {
+            emptyList()
+        }
+
+        Dialog(
+            onDismissRequest = { showAllDownloadsDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(DarkBackground),
+                color = DarkBackground
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "TÜM İNDİRİLENLER",
+                            color = SpotGreen,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        IconButton(onClick = { showAllDownloadsDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Kapat", tint = White)
+                        }
+                    }
+
+                    // Arama Girişi
+                    OutlinedTextField(
+                        value = downloadsSearchQuery,
+                        onValueChange = {
+                            downloadsSearchQuery = it
+                            downloadsCurrentPage = 1
+                        },
+                        placeholder = { Text("İndirilenler arasında ara...", color = TextGrey, fontSize = 14.sp) },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = White,
+                            unfocusedTextColor = White,
+                            focusedBorderColor = SpotGreen,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            cursorColor = SpotGreen,
+                            focusedLabelColor = SpotGreen
+                        ),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Ara", tint = TextGrey) }
+                    )
+
+                    if (paginatedList.isEmpty()) {
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Aradığınız kriterlere uygun indirilen parça bulunamadı.",
+                                color = TextGrey,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        // Paginated List
+                        LazyColumn(
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(paginatedList) { track ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            Color.White.copy(alpha = 0.04f),
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable { 
+                                            showAllDownloadsDialog = false
+                                            viewModel.playTrack(track) 
+                                        }
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AsyncImage(
+                                        model = track.thumbnailUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            track.title,
+                                            color = White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            track.author,
+                                            color = TextGrey,
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    IconButton(onClick = { viewModel.deleteDownloadedTrack(track.id) }) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Sil",
+                                            tint = Color.Red.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Pagination controls styled exactly as 10/100 pagination UI requested!
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(DarkCardSurface, RoundedCornerShape(16.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(16.dp))
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = { if (downloadsCurrentPage > 1) downloadsCurrentPage-- },
+                                enabled = downloadsCurrentPage > 1
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowBack,
+                                    contentDescription = "Önceki Sayfa",
+                                    tint = if (downloadsCurrentPage > 1) SpotGreen else TextGrey.copy(alpha = 0.4f)
+                                )
+                            }
+
+                            // Shows "Showing bounds/total count" and "page/pages" elegantly in turkish: e.g. "Sayfa 1 / 3 (10 / 28) Öğe"
+                            val shownItemsText = if (totalItems > 0) "${startIndex + 1}-$endIndex" else "0"
+                            Text(
+                                text = "Sayfa $downloadsCurrentPage / $totalPages  ($shownItemsText / $totalItems)",
+                                color = White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            IconButton(
+                                onClick = { if (downloadsCurrentPage < totalPages) downloadsCurrentPage++ },
+                                enabled = downloadsCurrentPage < totalPages
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = "Sonraki Sayfa",
+                                    tint = if (downloadsCurrentPage < totalPages) SpotGreen else TextGrey.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1831,7 +2052,7 @@ fun FullPlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 12.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -1839,7 +2060,7 @@ fun FullPlayerScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -1847,25 +2068,27 @@ fun FullPlayerScreen(
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Kapat", tint = White, modifier = Modifier.size(32.dp))
                 }
                 Text(
-                    text = "Şu An Çalınan",
-                    color = White,
-                    fontSize = 14.sp,
+                    text = "ŞU AN ÇALINAN",
+                    color = SpotGreen,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                    letterSpacing = 2.sp
                 )
                 IconButton(onClick = { isAddToPlaylistOpen = true }) {
                     Icon(Icons.Default.Add, contentDescription = "Ekle", tint = White)
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Cover Album Art Image
+            // Cover Album Art Image - Square Frame
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.85f)
+                    .fillMaxWidth(0.65f)
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp))
+                    .border(3.dp, SpotGreen, RoundedCornerShape(8.dp))
+                    .padding(4.dp)
+                    .clip(RoundedCornerShape(0.dp)) // sharp square corner inside the frame
                     .background(Color.Black)
             ) {
                 AsyncImage(
@@ -1876,180 +2099,196 @@ fun FullPlayerScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Metadata: title and author channel
+            // Metadata: title and author channel (Ensuring title does NOT enter the cover under any circumstance)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = currentTrack.title,
                         color = White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                        letterSpacing = (-0.5).sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = currentTrack.author,
                         color = TextGrey,
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
                 IconButton(onClick = { viewModel.startTrackDownload(currentTrack) }) {
                     Icon(
-                        imageVector = if (currentTrack.isDownloaded) Icons.Default.Check else Icons.Default.Check,
+                        imageVector = Icons.Default.Check,
                         contentDescription = "İndir",
-                        tint = if (currentTrack.isDownloaded) SpotGreen else White,
-                        modifier = Modifier.size(28.dp)
+                        tint = if (currentTrack.isDownloaded) SpotGreen else White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Progress Slider
-            Slider(
-                value = progress,
-                onValueChange = { percent ->
-                    val pos = (percent * durMs).toInt()
-                    PlaybackManager.seekTo(pos)
-                },
-                colors = SliderDefaults.colors(
-                    thumbColor = SpotGreen,
-                    activeTrackColor = SpotGreen,
-                    inactiveTrackColor = DarkCardSurface
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            // Duration and Position labels
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = formatMs(posMs),
-                    color = TextGrey,
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = formatMs(durMs),
-                    color = TextGrey,
-                    fontSize = 12.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Music actions layout: Row centering Play buttons
-            Row(
+            // Compact Elegant Controls Hub with Custom Glassmorphism Overlay
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White.copy(alpha = 0.04f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
             ) {
-                // Loop mode toggle
-                IconButton(onClick = {
-                    val nextLoop = when (loopMode) {
-                        LoopMode.NONE -> LoopMode.REPEAT_ONE
-                        LoopMode.REPEAT_ONE -> LoopMode.REPEAT_ALL
-                        LoopMode.REPEAT_ALL -> LoopMode.NONE
-                    }
-                    PlaybackManager.setLoopMode(nextLoop)
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Loop",
-                        tint = if (loopMode != LoopMode.NONE) SpotGreen else White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                IconButton(onClick = { PlaybackManager.skipToPrevious(context) }) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = White, modifier = Modifier.size(36.dp))
-                }
-
-                // Mini progress loading inside Main Button
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(White, CircleShape)
-                        .clickable { PlaybackManager.togglePlayPause(context) }
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (isBuffering) {
-                        CircularProgressIndicator(
-                            color = Color.Black,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "PlayPause",
-                            tint = Color.Black,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-
-                IconButton(onClick = { PlaybackManager.skipToNext(context) }) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = White, modifier = Modifier.size(36.dp))
-                }
-
-                // Quick visual queue checker toggle
-                IconButton(onClick = { expandedQueueState = !expandedQueueState }) {
-                    Icon(
-                        imageVector = Icons.Default.List,
-                        contentDescription = "Queue List",
-                        tint = if (expandedQueueState) SpotGreen else White,
-                        modifier = Modifier.size(24.dp)
+                    // Progress Slider
+                    Slider(
+                        value = progress,
+                        onValueChange = { percent ->
+                            val pos = (percent * durMs).toInt()
+                            PlaybackManager.seekTo(pos)
+                        },
+                        colors = SliderDefaults.colors(
+                            thumbColor = SpotGreen,
+                            activeTrackColor = SpotGreen,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
-                }
-            }
 
-            // Additional rewind forward actions
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                IconButton(onClick = { PlaybackManager.rewind10s() }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "-10", tint = TextGrey, modifier = Modifier.size(20.dp))
-                        Text("10s", color = TextGrey, fontSize = 11.sp)
+                    // Duration and Position labels
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = formatMs(posMs),
+                            color = TextGrey,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = formatMs(durMs),
+                            color = TextGrey,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Music actions layout: Row centering Play buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        // Loop mode toggle
+                        IconButton(onClick = {
+                            val nextLoop = when (loopMode) {
+                                LoopMode.NONE -> LoopMode.REPEAT_ONE
+                                LoopMode.REPEAT_ONE -> LoopMode.REPEAT_ALL
+                                LoopMode.REPEAT_ALL -> LoopMode.NONE
+                            }
+                            PlaybackManager.setLoopMode(nextLoop)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Loop",
+                                tint = if (loopMode != LoopMode.NONE) SpotGreen else White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        IconButton(onClick = { PlaybackManager.skipToPrevious(context) }) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = White, modifier = Modifier.size(32.dp))
+                        }
+
+                        // Mini progress loading inside Main Button
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(White, CircleShape)
+                                .clickable { PlaybackManager.togglePlayPause(context) }
+                        ) {
+                            if (isBuffering) {
+                                CircularProgressIndicator(
+                                    color = Color.Black,
+                                    strokeWidth = 2.5.dp,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "PlayPause",
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+
+                        IconButton(onClick = { PlaybackManager.skipToNext(context) }) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = White, modifier = Modifier.size(32.dp))
+                        }
+
+                        // Quick visual queue checker toggle
+                        IconButton(onClick = { expandedQueueState = !expandedQueueState }) {
+                            Icon(
+                                imageVector = Icons.Default.List,
+                                contentDescription = "Queue List",
+                                tint = if (expandedQueueState) SpotGreen else White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Additional rewind forward actions
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { PlaybackManager.rewind10s() }) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "-10s", tint = TextGrey, modifier = Modifier.size(16.dp))
+                                Text("10s", color = TextGrey, fontSize = 10.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(28.dp))
+                        Text(
+                            text = when (loopMode) {
+                                LoopMode.NONE -> "Döngü Modu Kapalı"
+                                LoopMode.REPEAT_ONE -> "Tekrar: Tek Parça"
+                                LoopMode.REPEAT_ALL -> "Tekrar: Tümü"
+                            },
+                            color = SpotGreen.copy(alpha = 0.9f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(28.dp))
+                        IconButton(onClick = { PlaybackManager.forward10s() }) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("10s+", color = TextGrey, fontSize = 10.sp)
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "10s+", tint = TextGrey, modifier = Modifier.size(16.dp))
+                            }
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.width(36.dp))
-                IconButton(onClick = { PlaybackManager.forward10s() }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("10s+", color = TextGrey, fontSize = 11.sp)
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "10+", tint = TextGrey, modifier = Modifier.size(20.dp))
-                    }
-                }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Small active active indicator status of loop
-            Text(
-                text = when (loopMode) {
-                    LoopMode.NONE -> "Döngü Modu Kapalı"
-                    LoopMode.REPEAT_ONE -> "Tekrar Modu: Tek Parça"
-                    LoopMode.REPEAT_ALL -> "Tekrar Modu: Tümü"
-                },
-                color = SpotGreen,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
 
             if (expandedQueueState && queue.isNotEmpty()) {
                 Surface(
@@ -2057,11 +2296,11 @@ fun FullPlayerScreen(
                     color = DarkCardSurface,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
-                        .padding(vertical = 12.dp)
+                        .height(180.dp)
+                        .padding(vertical = 10.dp)
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
-                        Text("Sıradaki Parçalar", color = White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Sıradaki Parçalar", color = White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Spacer(modifier = Modifier.height(4.dp))
                         LazyColumn {
                             items(queue) { qTrack ->

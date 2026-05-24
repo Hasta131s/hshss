@@ -119,10 +119,30 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
     )
 
     init {
-        // Init state & transition to LOGIN
+        // Initialize UserApi with context
+        com.example.api.UserApi.init(context)
+
+        // Init state & transition to SUCCESS or LOGIN (1 month auto-login)
         viewModelScope.launch {
             delay(1500)
-            _loginState.value = LoginState.LOGIN
+            
+            val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+            val cachedUserId = prefs.getInt("cached_user_id", -1)
+            val cachedLoginTime = prefs.getLong("cached_login_time", 0)
+            val oneMonthMs = 30L * 24 * 60 * 60 * 1000 // 30 days
+            
+            if (cachedUserId != -1 && (System.currentTimeMillis() - cachedLoginTime) < oneMonthMs) {
+                _currentUserId.value = cachedUserId
+                _currentUsername.value = prefs.getString("cached_username", "") ?: ""
+                _currentUserEmail.value = prefs.getString("cached_email", "") ?: ""
+                _isAdmin.value = prefs.getBoolean("cached_is_admin", false)
+                _loginState.value = LoginState.SUCCESS
+                if (_isAdmin.value) {
+                    fetchAdminUsersList()
+                }
+            } else {
+                _loginState.value = LoginState.LOGIN
+            }
             
             // Generate standard initial playlists if they don't exist
             playlists.collect { list ->
@@ -141,6 +161,18 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun saveCachedUser(id: Int, username: String, email: String, isAdmin: Boolean) {
+        val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+        prefs.edit().apply {
+            putInt("cached_user_id", id)
+            putString("cached_username", username)
+            putString("cached_email", email)
+            putBoolean("cached_is_admin", isAdmin)
+            putLong("cached_login_time", System.currentTimeMillis())
+            apply()
+        }
+    }
+
     // AUTH ACTIONS
     fun setLoginState(state: LoginState) {
         _loginState.value = state
@@ -152,13 +184,15 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
             val success = response.optBoolean("success", false)
             val message = response.optString("message", "Bilinmeyen hata")
             if (success) {
-                // If register auto logs in, some backends return user details, else we just redirect to LOGIN
                 val userObj = response.optJSONObject("user")
                 if (userObj != null) {
-                    _currentUserId.value = userObj.optInt("id", 0)
+                    val uid = userObj.optInt("id", 0)
+                    _currentUserId.value = uid
                     _currentUsername.value = userObj.optString("username", usernameTxt)
                     _currentUserEmail.value = userObj.optString("email", emailTxt)
-                    _isAdmin.value = emailTxt.lowercase() == "kayra@gmail.com"
+                    val isAdm = emailTxt.lowercase() == "kayra@gmail.com"
+                    _isAdmin.value = isAdm
+                    saveCachedUser(uid, userObj.optString("username", usernameTxt), userObj.optString("email", emailTxt), isAdm)
                     _loginState.value = LoginState.SUCCESS
                     onResult(true, "Kayıt başarıyla tamamlandı ve giriş yapıldı!")
                 } else {
@@ -180,13 +214,19 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
             
             if (success || isHardcodedAdmin) {
                 val userObj = response.optJSONObject("user")
-                _currentUserId.value = userObj?.optInt("id", 1) ?: 1
-                _currentUsername.value = userObj?.optString("username", if (isHardcodedAdmin) "Admin Kayra" else "Kullanıcı") ?: (if (isHardcodedAdmin) "Admin Kayra" else "Kullanıcı")
-                _currentUserEmail.value = userObj?.optString("email", emailTxt) ?: emailTxt
-                _isAdmin.value = isHardcodedAdmin
+                val uid = userObj?.optInt("id", 1) ?: 1
+                val uname = userObj?.optString("username", if (isHardcodedAdmin) "Admin Kayra" else "Kullanıcı") ?: (if (isHardcodedAdmin) "Admin Kayra" else "Kullanıcı")
+                val uemail = userObj?.optString("email", emailTxt) ?: emailTxt
+                val isAdm = isHardcodedAdmin || uemail.lowercase() == "kayra@gmail.com"
+                
+                _currentUserId.value = uid
+                _currentUsername.value = uname
+                _currentUserEmail.value = uemail
+                _isAdmin.value = isAdm
+                saveCachedUser(uid, uname, uemail, isAdm)
                 _loginState.value = LoginState.SUCCESS
                 
-                if (isHardcodedAdmin) {
+                if (isAdm) {
                     fetchAdminUsersList()
                 }
                 onResult(true, "Giriş başarılı!")
@@ -239,6 +279,7 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
             if (success) {
                 _currentUsername.value = usernameVal
                 _currentUserEmail.value = emailVal
+                saveCachedUser(_currentUserId.value ?: 1, usernameVal, emailVal, _isAdmin.value)
                 onResult(true, "Profiliniz başarıyla güncellendi.")
             } else {
                 onResult(false, message)

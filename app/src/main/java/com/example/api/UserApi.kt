@@ -17,8 +17,74 @@ object UserApi {
     private const val TAG = "UserApi"
     private const val BASE_URL = "http://bosforlab.online"
 
-    // Simple CookieJar to persist cookies and act like a real Session in python
     private val cookieStore = HashMap<String, List<Cookie>>()
+    private var sharedPreferences: android.content.SharedPreferences? = null
+
+    fun init(context: android.content.Context) {
+        sharedPreferences = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+        loadCookiesFromPrefs()
+    }
+
+    private fun saveCookiesToPrefs(host: String, cookies: List<Cookie>) {
+        val prefs = sharedPreferences ?: return
+        val set = cookies.map { cookie ->
+            val builder = StringBuilder()
+            builder.append(cookie.name).append("=")
+                   .append(cookie.value).append(";")
+                   .append(cookie.domain).append(";")
+                   .append(cookie.path).append(";")
+                   .append(cookie.expiresAt).append(";")
+                   .append(if (cookie.secure) "1" else "0").append(";")
+                   .append(if (cookie.httpOnly) "1" else "0")
+            builder.toString()
+        }.toSet()
+        prefs.edit().putStringSet("cookies_$host", set).apply()
+    }
+
+    private fun loadCookiesFromPrefs() {
+        val prefs = sharedPreferences ?: return
+        try {
+            val keys = prefs.all.keys
+            for (key in keys) {
+                if (key.startsWith("cookies_")) {
+                    val host = key.substring("cookies_".length)
+                    val set = prefs.getStringSet(key, null) ?: continue
+                    val loaded = mutableListOf<Cookie>()
+                    for (serialized in set) {
+                        try {
+                            val parts = serialized.split(";")
+                            val nameValue = parts[0].split("=")
+                            val name = nameValue[0]
+                            val value = nameValue[1]
+                            val domain = parts[1]
+                            val path = parts[2]
+                            val expiresAt = parts[3].toLong()
+                            val secure = parts[4] == "1"
+                            val httpOnly = parts[5] == "1"
+
+                            val builder = Cookie.Builder()
+                                .name(name)
+                                .value(value)
+                                .domain(domain)
+                                .path(path)
+                            if (expiresAt > System.currentTimeMillis()) {
+                                builder.expiresAt(expiresAt)
+                            }
+                            if (secure) builder.secure()
+                            if (httpOnly) builder.httpOnly()
+
+                            loaded.add(builder.build())
+                        } catch (e: Exception) {
+                            Log.e(TAG, "parse cookie failure", e)
+                        }
+                    }
+                    cookieStore[host] = loaded
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading cookies from prefs", e)
+        }
+    }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -26,12 +92,22 @@ object UserApi {
         .writeTimeout(15, TimeUnit.SECONDS)
         .cookieJar(object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                cookieStore[url.host] = cookies
-                Log.d(TAG, "Saved cookies: $cookies")
+                if (cookies.isNotEmpty()) {
+                    val existing = cookieStore[url.host]?.toMutableList() ?: mutableListOf()
+                    for (newCookie in cookies) {
+                        existing.removeAll { it.name == newCookie.name }
+                        existing.add(newCookie)
+                    }
+                    cookieStore[url.host] = existing
+                    saveCookiesToPrefs(url.host, existing)
+                    Log.d(TAG, "Saved and merged cookies: $existing")
+                }
             }
 
             override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                return cookieStore[url.host] ?: emptyList()
+                val list = cookieStore[url.host] ?: emptyList()
+                Log.d(TAG, "Loading cookies for ${url.host}: $list")
+                return list
             }
         })
         .build()
@@ -40,6 +116,7 @@ object UserApi {
 
     fun clearSession() {
         cookieStore.clear()
+        sharedPreferences?.edit()?.clear()?.apply()
     }
 
     /**
