@@ -1,0 +1,6 @@
+{
+  "name": "Flofys",
+  "description": "Spotify interface with YouTube search, download features, and beautiful local playlists",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
