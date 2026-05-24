@@ -133,10 +133,10 @@ fun SplashScreen() {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier.size(52.dp)
+                     imageVector = Icons.Default.MusicNote,
+                     contentDescription = null,
+                     tint = Color.Black,
+                     modifier = Modifier.size(52.dp)
                 )
             }
             Spacer(modifier = Modifier.height(24.dp))
@@ -189,7 +189,7 @@ fun LoginScreen(viewModel: FlofysViewModel) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.PlayArrow,
+                    imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
                     tint = Color.Black,
                     modifier = Modifier.size(42.dp)
@@ -559,6 +559,61 @@ fun PasswordStrengthIndicator(score: Int, passwordLength: Int) {
 fun MainDashboard(viewModel: FlofysViewModel) {
     val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
     val playingTrack by PlaybackManager.currentTrack.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val allLocalTracks by viewModel.allTracks.collectAsStateWithLifecycle()
+    
+    LaunchedEffect(searchResults, allLocalTracks, playingTrack) {
+        val currentTrack = playingTrack
+        if (currentTrack != null) {
+            val allAvailable = (searchResults + allLocalTracks).distinctBy { it.id }
+            val scoredList = allAvailable.filter { it.id != currentTrack.id }
+                .map { candidate ->
+                    var score = 0
+                    val candAuthor = candidate.author.lowercase().trim()
+                    val currAuthor = currentTrack.author.lowercase().trim()
+                    
+                    // Match by artist/author
+                    if (candAuthor == currAuthor && currAuthor != "unknown artist" && currAuthor != "unknown channel") {
+                        score += 100
+                    } else if ((candAuthor.contains(currAuthor) || currAuthor.contains(candAuthor)) && 
+                               currAuthor != "unknown artist" && currAuthor != "unknown channel" && 
+                               candAuthor.length > 3 && currAuthor.length > 3) {
+                        score += 50
+                    }
+                    
+                    // Match by title keywords (same name/words)
+                    val candTitle = candidate.title.lowercase()
+                    val currTitleCleaned = currentTrack.title.lowercase()
+                        .replace(Regex("[^a-zA-Z0-9ğüşıöçâîû\\s]"), " ")
+                    
+                    // Exclude common noise terms from candidate keyword check to avoid false matches
+                    val stopWords = setOf("the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "with", "feat", "ft", "remix", "mix", "video", "audio", "lyrics", "official")
+                    val words = currTitleCleaned.split("\\s+".toRegex())
+                        .map { it.trim() }
+                        .filter { it.length >= 3 && !stopWords.contains(it) }
+                    
+                    var matchedTitleWords = 0
+                    for (word in words) {
+                        if (candTitle.contains(word)) {
+                            matchedTitleWords++
+                            score += 30
+                        }
+                    }
+                    
+                    candidate to score
+                }
+            
+            // Return only items that actually match the search criteria (score > 0)
+            val recommendations = scoredList.filter { it.second > 0 }
+                .sortedByDescending { it.second }
+                .map { it.first }
+                .distinctBy { it.id }
+                
+            PlaybackManager.setRecommendedTracks(recommendations)
+        } else {
+            PlaybackManager.setRecommendedTracks(emptyList())
+        }
+    }
     
     var isPlayerExpanded by remember { mutableStateOf(false) }
 
@@ -734,12 +789,12 @@ fun MiniPlayerRow(
                     )
                 }
                 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 
                 if (isBuffering) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .background(Color.White.copy(alpha = 0.04f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -753,7 +808,7 @@ fun MiniPlayerRow(
                     IconButton(
                         onClick = { PlaybackManager.togglePlayPause(context) },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .background(Color.White.copy(alpha = 0.04f), CircleShape)
                     ) {
                         Icon(
@@ -765,19 +820,19 @@ fun MiniPlayerRow(
                     }
                 }
                 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
                 IconButton(
                     onClick = { PlaybackManager.skipToNext(context) },
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(Color.White.copy(alpha = 0.04f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Sıradaki",
                         tint = White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -2063,8 +2118,7 @@ fun FullPlayerScreen(
     val loopMode by PlaybackManager.loopMode.collectAsStateWithLifecycle()
     val queue by PlaybackManager.playbackQueue.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
-    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
-    val allLocalTracks by viewModel.allTracks.collectAsStateWithLifecycle()
+    val recommendedTracks by PlaybackManager.recommendedTracks.collectAsStateWithLifecycle()
 
     var isAddToPlaylistOpen by remember { mutableStateOf(false) }
     var expandedQueueState by remember { mutableStateOf(false) }
@@ -2075,53 +2129,6 @@ fun FullPlayerScreen(
     if (track == null) return
 
     val currentTrack = track!!
-
-    val recommendedTracks = remember(searchResults, allLocalTracks, currentTrack) {
-        val allAvailable = (searchResults + allLocalTracks).distinctBy { it.id }
-        
-        val scoredList = allAvailable.filter { it.id != currentTrack.id }
-            .map { candidate ->
-                var score = 0
-                val candAuthor = candidate.author.lowercase().trim()
-                val currAuthor = currentTrack.author.lowercase().trim()
-                
-                // Match by artist/author
-                if (candAuthor == currAuthor && currAuthor != "unknown artist" && currAuthor != "unknown channel") {
-                    score += 100
-                } else if ((candAuthor.contains(currAuthor) || currAuthor.contains(candAuthor)) && 
-                           currAuthor != "unknown artist" && currAuthor != "unknown channel" && 
-                           candAuthor.length > 3 && currAuthor.length > 3) {
-                    score += 50
-                }
-                
-                // Match by title keywords (same name/words)
-                val candTitle = candidate.title.lowercase()
-                val currTitleCleaned = currentTrack.title.lowercase()
-                    .replace(Regex("[^a-zA-Z0-9ğüşıöçâîû\\s]"), " ")
-                
-                // Exclude common noise terms from candidate keyword check to avoid false matches
-                val stopWords = setOf("the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "with", "feat", "ft", "remix", "mix", "video", "audio", "lyrics", "official")
-                val words = currTitleCleaned.split("\\s+".toRegex())
-                    .map { it.trim() }
-                    .filter { it.length >= 3 && !stopWords.contains(it) }
-                
-                var matchedTitleWords = 0
-                for (word in words) {
-                    if (candTitle.contains(word)) {
-                        matchedTitleWords++
-                        score += 30
-                    }
-                }
-                
-                candidate to score
-            }
-        
-        // Return only items that actually match the search criteria (score > 0)
-        scoredList.filter { it.second > 0 }
-            .sortedByDescending { it.second }
-            .map { it.first }
-            .distinctBy { it.id }
-    }
 
     Box(
         modifier = Modifier
@@ -2427,10 +2434,22 @@ fun FullPlayerScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { PlaybackManager.rewind10s() }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "-10s", tint = TextGrey, modifier = Modifier.size(16.dp))
-                        Text("10s-", color = TextGrey, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                IconButton(
+                    onClick = { PlaybackManager.rewind10s() },
+                    modifier = Modifier.width(72.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FastRewind,
+                            contentDescription = "-10s",
+                            tint = White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("10s", color = White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Spacer(modifier = Modifier.width(32.dp))
@@ -2445,10 +2464,22 @@ fun FullPlayerScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.width(32.dp))
-                IconButton(onClick = { PlaybackManager.forward10s() }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("10s+", color = TextGrey, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "10s+", tint = TextGrey, modifier = Modifier.size(16.dp))
+                IconButton(
+                    onClick = { PlaybackManager.forward10s() },
+                    modifier = Modifier.width(72.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text("10s", color = White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.FastForward,
+                            contentDescription = "10s+",
+                            tint = White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }

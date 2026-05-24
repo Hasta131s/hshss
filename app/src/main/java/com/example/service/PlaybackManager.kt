@@ -59,6 +59,13 @@ object PlaybackManager {
     private val _loopMode = MutableStateFlow(LoopMode.NONE)
     val loopMode = _loopMode.asStateFlow()
 
+    private val _recommendedTracks = MutableStateFlow<List<Track>>(emptyList())
+    val recommendedTracks = _recommendedTracks.asStateFlow()
+
+    fun setRecommendedTracks(tracks: List<Track>) {
+        _recommendedTracks.value = tracks
+    }
+
     // Playlist/Track change callback for UI sync
     var onTrackChanged: ((Track) -> Unit)? = null
 
@@ -239,6 +246,29 @@ object PlaybackManager {
                 val firstTrack = list[0]
                 _currentTrack.value = firstTrack
                 playCurrentTrack(firstTrack)
+                startPlaybackService(context)
+            } else {
+                // If we are at the end of the queue, or only playing a standalone track,
+                // try to play the first recommended track if available.
+                val recs = _recommendedTracks.value
+                if (recs.isNotEmpty()) {
+                    val nextTrack = recs[0]
+                    _playbackQueue.value = listOf(nextTrack)
+                    _currentQueueIndex.value = 0
+                    _currentTrack.value = nextTrack
+                    playCurrentTrack(nextTrack)
+                    startPlaybackService(context)
+                }
+            }
+        } else {
+            // Queue is empty or null, fallback to recommended tracks
+            val recs = _recommendedTracks.value
+            if (recs.isNotEmpty()) {
+                val nextTrack = recs[0]
+                _playbackQueue.value = listOf(nextTrack)
+                _currentQueueIndex.value = 0
+                _currentTrack.value = nextTrack
+                playCurrentTrack(nextTrack)
                 startPlaybackService(context)
             }
         }
