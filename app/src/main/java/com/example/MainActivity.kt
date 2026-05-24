@@ -687,17 +687,17 @@ fun MiniPlayerRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
             .clickable { onClicked() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF18181A)),
-        border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.09f))
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF131315)),
+        border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.12f))
     ) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
@@ -705,9 +705,9 @@ fun MiniPlayerRow(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.2.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(1.2.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(
@@ -716,12 +716,12 @@ fun MiniPlayerRow(
                     Text(
                         text = track.title,
                         color = White,
-                        fontSize = 13.5.sp,
+                        fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = track.author,
                         color = TextGrey,
@@ -731,13 +731,36 @@ fun MiniPlayerRow(
                     )
                 }
                 
-                if (isBuffering) {
-                    CircularProgressIndicator(
-                        color = SpotGreen,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(24.dp)
+                // Skip Previous
+                IconButton(
+                    onClick = { PlaybackManager.skipToPrevious(context) },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(Color.White.copy(alpha = 0.04f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Önceki",
+                        tint = White,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                
+                if (isBuffering) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(Color.White.copy(alpha = 0.04f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = SpotGreen,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                 } else {
                     IconButton(
                         onClick = { PlaybackManager.togglePlayPause(context) },
@@ -752,7 +775,7 @@ fun MiniPlayerRow(
                             modifier = Modifier.size(26.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                 }
 
                 IconButton(
@@ -765,17 +788,17 @@ fun MiniPlayerRow(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Sıradaki",
                         tint = White,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
             
-            // Beautiful progress line running at the bottom of the card
+            // Premium progress indicator line running at the bottom of the card
             LinearProgressIndicator(
                 progress = progress,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(2.5.dp),
+                    .height(3.dp),
                 color = SpotGreen,
                 trackColor = Color.White.copy(alpha = 0.1f)
             )
@@ -2052,6 +2075,7 @@ fun FullPlayerScreen(
     val queue by PlaybackManager.playbackQueue.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val allLocalTracks by viewModel.allTracks.collectAsStateWithLifecycle()
 
     var isAddToPlaylistOpen by remember { mutableStateOf(false) }
     var expandedQueueState by remember { mutableStateOf(false) }
@@ -2063,47 +2087,51 @@ fun FullPlayerScreen(
 
     val currentTrack = track!!
 
-    val recommendedTracks = remember(searchResults, currentTrack) {
-        val scoredList = searchResults.filter { it.id != currentTrack.id }
+    val recommendedTracks = remember(searchResults, allLocalTracks, currentTrack) {
+        val allAvailable = (searchResults + allLocalTracks).distinctBy { it.id }
+        
+        val scoredList = allAvailable.filter { it.id != currentTrack.id }
             .map { candidate ->
                 var score = 0
                 val candAuthor = candidate.author.lowercase().trim()
                 val currAuthor = currentTrack.author.lowercase().trim()
                 
-                // Match by artist
-                if (candAuthor == currAuthor) {
+                // Match by artist/author
+                if (candAuthor == currAuthor && currAuthor != "unknown artist" && currAuthor != "unknown channel") {
+                    score += 100
+                } else if ((candAuthor.contains(currAuthor) || currAuthor.contains(candAuthor)) && 
+                           currAuthor != "unknown artist" && currAuthor != "unknown channel" && 
+                           candAuthor.length > 3 && currAuthor.length > 3) {
                     score += 50
-                } else if (candAuthor.contains(currAuthor) || currAuthor.contains(candAuthor)) {
-                    score += 25
                 }
                 
-                // Match by title keywords
+                // Match by title keywords (same name/words)
                 val candTitle = candidate.title.lowercase()
                 val currTitleCleaned = currentTrack.title.lowercase()
                     .replace(Regex("[^a-zA-Z0-9ğüşıöçâîû\\s]"), " ")
-                val words = currTitleCleaned.split("\\s+".toRegex()).filter { it.length >= 3 }
                 
-                var matchedWords = 0
+                // Exclude common noise terms from candidate keyword check to avoid false matches
+                val stopWords = setOf("the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "with", "feat", "ft", "remix", "mix", "video", "audio", "lyrics", "official")
+                val words = currTitleCleaned.split("\\s+".toRegex())
+                    .map { it.trim() }
+                    .filter { it.length >= 3 && !stopWords.contains(it) }
+                
+                var matchedTitleWords = 0
                 for (word in words) {
                     if (candTitle.contains(word)) {
-                        matchedWords++
-                        score += 15
+                        matchedTitleWords++
+                        score += 30
                     }
                 }
                 
                 candidate to score
             }
         
-        val matchedOnly = scoredList.filter { it.second > 0 }
+        // Return only items that actually match the search criteria (score > 0)
+        scoredList.filter { it.second > 0 }
             .sortedByDescending { it.second }
             .map { it.first }
-            
-        if (matchedOnly.isNotEmpty()) {
-            matchedOnly
-        } else {
-            // Fallback to standard other results if no direct similarity matches are found
-            searchResults.filter { it.id != currentTrack.id }
-        }
+            .distinctBy { it.id }
     }
 
     Box(

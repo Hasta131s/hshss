@@ -390,12 +390,79 @@ object FlofysDownloader {
         return list
     }
 
+    private suspend fun getPipedStreamLink(videoId: String): String? {
+        for (instance in PIPED_INSTANCES) {
+            try {
+                val url = "$instance/streams/$videoId"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        val json = JSONObject(body)
+                        val audioStreams = json.optJSONArray("audioStreams")
+                        if (audioStreams != null && audioStreams.length() > 0) {
+                            val stream = audioStreams.getJSONObject(0)
+                            val streamUrl = stream.optString("url", "")
+                            if (streamUrl.isNotEmpty()) {
+                                Log.d(TAG, "Successfully extracted direct audio stream from Piped instance: $instance")
+                                return streamUrl
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get stream from Piped instance $instance: ${e.message}")
+            }
+        }
+        return null
+    }
+
+    private suspend fun getInvidiousStreamLink(videoId: String): String? {
+        for (instance in INVIDIOUS_INSTANCES) {
+            try {
+                val url = "$instance/api/v1/videos/$videoId"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        val json = JSONObject(body)
+                        val adaptiveFormats = json.optJSONArray("adaptiveFormats")
+                        if (adaptiveFormats != null && adaptiveFormats.length() > 0) {
+                            for (i in 0 until adaptiveFormats.length()) {
+                                val format = adaptiveFormats.getJSONObject(i)
+                                val type = format.optString("type", "")
+                                if (type.startsWith("audio/")) {
+                                    val streamUrl = format.optString("url", "")
+                                    if (streamUrl.isNotEmpty()) {
+                                        Log.d(TAG, "Successfully extracted direct audio stream from Invidious instance: $instance")
+                                        return streamUrl
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get stream from Invidious instance $instance: ${e.message}")
+            }
+        }
+        return null
+    }
+
     /**
      * Gets direct music streaming or download MP3 link using YT5s-inspired pipeline
-     * or JioSavan if applicable.
+     * with multi-source direct audio fallback.
      */
     suspend fun getMp3DownloadLink(videoId: String): String? {
         val videoUrl = "https://www.youtube.com/watch?v=$videoId"
+        
+        // 1. Try existing Widget conversion
         try {
             // 2. Fetch Widget Data
             val widgetUrl = "https://api.ytmp3.tube/widgetplus?url=${URLEncoder.encode(videoUrl, "UTF-8")}&title=Video+Download"
@@ -407,72 +474,92 @@ object FlofysDownloader {
 
             var widgetDataJson: JSONObject? = null
             client.newCall(req1).execute().use { res1 ->
-                if (!res1.isSuccessful) return null
-                val html = res1.body?.string() ?: return null
-
-                var idIdx = html.indexOf("id=\"widget-data\"")
-                if (idIdx == -1) {
-                    idIdx = html.indexOf("id='widget-data'")
-                }
-                if (idIdx != -1) {
-                    val contentStart = html.indexOf(">", idIdx) + 1
-                    val endTag = "</script>"
-                    val endIdx = html.indexOf(endTag, contentStart)
-                    if (endIdx != -1) {
-                        val rawWidgetData = html.substring(contentStart, endIdx).trim()
-                        widgetDataJson = JSONObject(rawWidgetData)
+                if (res1.isSuccessful) {
+                    val html = res1.body?.string()
+                    if (html != null) {
+                        var idIdx = html.indexOf("id=\"widget-data\"")
+                        if (idIdx == -1) {
+                            idIdx = html.indexOf("id='widget-data'")
+                        }
+                        if (idIdx != -1) {
+                            val contentStart = html.indexOf(">", idIdx) + 1
+                            val endTag = "</script>"
+                            val endIdx = html.indexOf(endTag, contentStart)
+                            if (endIdx != -1) {
+                                val rawWidgetData = html.substring(contentStart, endIdx).trim()
+                                widgetDataJson = JSONObject(rawWidgetData)
+                            }
+                        }
                     }
                 }
             }
 
-            val data = widgetDataJson ?: return null
-            val vId = data.optString("videoId")
-            val token = data.optString("token")
-            val timestamp = data.optString("timestamp")
-            val secretToken = data.optString("encryptedVideoId")
+            val data = widgetDataJson
+            if (data != null) {
+                val vId = data.optString("videoId")
+                val token = data.optString("token")
+                val timestamp = data.optString("timestamp")
+                val secretToken = data.optString("encryptedVideoId")
 
-            if (vId.isEmpty() || token.isEmpty() || timestamp.isEmpty() || secretToken.isEmpty()) {
-                return null
-            }
+                if (vId.isNotEmpty() && token.isNotEmpty() && timestamp.isNotEmpty() && secretToken.isNotEmpty()) {
+                    // 3. Query target conversion to MP3 link (forcing quality "64" to be lightweight as requested)
+                    val formatType = "mp3"
+                    val quality = "64" // Lowest quality for fast loading and low latency as requested
+                    val endpointUrl = "https://api.ytmp3.tube/api/download/$formatType"
 
-            // 3. Query target conversion to MP3 link (forcing quality "64" to be lightweight as requested)
-            val formatType = "mp3"
-            val quality = "64" // Lowest quality for fast loading and low latency as requested
-            val endpointUrl = "https://api.ytmp3.tube/api/download/$formatType"
+                    val jsonPayload = JSONObject().apply {
+                        put("id", vId)
+                        put("token", token)
+                        put("timestamp", timestamp)
+                        put("secretToken", secretToken)
+                        put("audioBitrate", quality)
+                    }
 
-            val jsonPayload = JSONObject().apply {
-                put("id", vId)
-                put("token", token)
-                put("timestamp", timestamp)
-                put("secretToken", secretToken)
-                put("audioBitrate", quality)
-            }
+                    val mediaType = "application/json; charset=utf-8".toMediaType()
+                    val reqBody = jsonPayload.toString().toRequestBody(mediaType)
 
-            val mediaType = "application/json; charset=utf-8".toMediaType()
-            val reqBody = jsonPayload.toString().toRequestBody(mediaType)
+                    val req2 = Request.Builder()
+                        .url(endpointUrl)
+                        .header("User-Agent", USER_AGENT)
+                        .header("Content-Type", "application/json")
+                        .header("Referer", "https://api.ytmp3.tube/widgetplus?url=${URLEncoder.encode(videoUrl, "UTF-8")}")
+                        .post(reqBody)
+                        .build()
 
-            val req2 = Request.Builder()
-                .url(endpointUrl)
-                .header("User-Agent", USER_AGENT)
-                .header("Content-Type", "application/json")
-                .header("Referer", "https://api.ytmp3.tube/widgetplus?url=${URLEncoder.encode(videoUrl, "UTF-8")}")
-                .post(reqBody)
-                .build()
+                    client.newCall(req2).execute().use { res2 ->
+                        if (res2.isSuccessful) {
+                            val resBody = res2.body?.string()
+                            if (resBody != null) {
+                                val resultObj = JSONObject(resBody)
+                                val status = resultObj.optString("status")
+                                val msg = resultObj.optString("msg")
 
-            client.newCall(req2).execute().use { res2 ->
-                if (!res2.isSuccessful) return null
-                val resBody = res2.body?.string() ?: return null
-                val resultObj = JSONObject(resBody)
-                val status = resultObj.optString("status")
-                val msg = resultObj.optString("msg")
-
-                if (status == "ok" || msg == "success") {
-                    return resultObj.optString("link")
+                                if (status == "ok" || msg == "success") {
+                                    val dlLink = resultObj.optString("link")
+                                    if (dlLink.isNotEmpty()) {
+                                        return dlLink
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
-            // safe quiet
+            Log.e(TAG, "YTmp3 conversion try failed: ${e.message}")
         }
+
+        // 2. Direct Audio Stream Fallback 1: Piped API
+        Log.w(TAG, "YTmp3 conversion failed. Attempting Piped Direct Audio Fallback for video ID: $videoId")
+        val pipedStream = getPipedStreamLink(videoId)
+        if (pipedStream != null) return pipedStream
+
+        // 3. Direct Audio Stream Fallback 2: Invidious API
+        Log.w(TAG, "Piped Fallback failed. Attempting Invidious Direct Audio Fallback for video ID: $videoId")
+        val invidiousStream = getInvidiousStreamLink(videoId)
+        if (invidiousStream != null) return invidiousStream
+
+        Log.e(TAG, "All media download pipeline streams failed for $videoId")
         return null
     }
 }
