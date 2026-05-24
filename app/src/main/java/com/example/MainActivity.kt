@@ -21,6 +21,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -556,111 +559,113 @@ fun MainDashboard(viewModel: FlofysViewModel) {
     
     var isPlayerExpanded by remember { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Transparent)
-            ) {
-                // Persistent mini player sticking above navigation bar
-                playingTrack?.let { track ->
-                    MiniPlayerRow(
-                        track = track,
-                        onClicked = { isPlayerExpanded = true }
-                    )
-                }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                if (!isPlayerExpanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Transparent)
+                    ) {
+                        // Persistent mini player sticking above navigation bar
+                        playingTrack?.let { track ->
+                            MiniPlayerRow(
+                                track = track,
+                                onClicked = { isPlayerExpanded = true }
+                            )
+                        }
 
-                // Beautiful Bottom Navigation standard
-                NavigationBar(
-                    containerColor = DarkSurface,
-                    modifier = Modifier.navigationBarsPadding(),
-                    tonalElevation = 8.dp
-                ) {
-                    NavigationBarItem(
-                        selected = currentTab == AppTab.HOME,
-                        onClick = { viewModel.setTab(AppTab.HOME) },
-                        icon = { Icon(Icons.Default.Home, contentDescription = "Ana Sayfa") },
-                        label = { Text("Ana Sayfa") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = SpotGreen,
-                            selectedTextColor = SpotGreen,
-                            unselectedIconColor = TextGrey,
-                            unselectedTextColor = TextGrey,
-                            indicatorColor = DarkCardSurface
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == AppTab.SEARCH,
-                        onClick = { viewModel.setTab(AppTab.SEARCH) },
-                        icon = { Icon(Icons.Default.Search, contentDescription = "Ara") },
-                        label = { Text("Arama") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = SpotGreen,
-                            selectedTextColor = SpotGreen,
-                            unselectedIconColor = TextGrey,
-                            unselectedTextColor = TextGrey,
-                            indicatorColor = DarkCardSurface
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == AppTab.LIBRARY,
-                        onClick = { viewModel.setTab(AppTab.LIBRARY) },
-                        icon = { Icon(Icons.Default.Favorite, contentDescription = "Kütüphane") },
-                        label = { Text("Kütüphanem") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = SpotGreen,
-                            selectedTextColor = SpotGreen,
-                            unselectedIconColor = TextGrey,
-                            unselectedTextColor = TextGrey,
-                            indicatorColor = DarkCardSurface
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == AppTab.DOWNLOADER,
-                        onClick = { viewModel.setTab(AppTab.DOWNLOADER) },
-                        icon = { Icon(Icons.Default.Check, contentDescription = "Yükleyici") },
-                        label = { Text("Yükleyici") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = SpotGreen,
-                            selectedTextColor = SpotGreen,
-                            unselectedIconColor = TextGrey,
-                            unselectedTextColor = TextGrey,
-                            indicatorColor = DarkCardSurface
-                        )
-                    )
+                        // Beautiful Bottom Navigation standard
+                        NavigationBar(
+                            containerColor = DarkSurface,
+                            modifier = Modifier.navigationBarsPadding(),
+                            tonalElevation = 8.dp
+                        ) {
+                            NavigationBarItem(
+                                selected = currentTab == AppTab.HOME,
+                                onClick = { viewModel.setTab(AppTab.HOME) },
+                                icon = { Icon(Icons.Default.Home, contentDescription = "Ana Sayfa") },
+                                label = { Text("Ana Sayfa") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = SpotGreen,
+                                    selectedTextColor = SpotGreen,
+                                    unselectedIconColor = TextGrey,
+                                    unselectedTextColor = TextGrey,
+                                    indicatorColor = DarkCardSurface
+                                )
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == AppTab.SEARCH,
+                                onClick = { viewModel.setTab(AppTab.SEARCH) },
+                                icon = { Icon(Icons.Default.Search, contentDescription = "Ara") },
+                                label = { Text("Arama") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = SpotGreen,
+                                    selectedTextColor = SpotGreen,
+                                    unselectedIconColor = TextGrey,
+                                    unselectedTextColor = TextGrey,
+                                    indicatorColor = DarkCardSurface
+                                )
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == AppTab.LIBRARY,
+                                onClick = { viewModel.setTab(AppTab.LIBRARY) },
+                                icon = { Icon(Icons.Default.Favorite, contentDescription = "Kütüphane") },
+                                label = { Text("Kütüphanem") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = SpotGreen,
+                                    selectedTextColor = SpotGreen,
+                                    unselectedIconColor = TextGrey,
+                                    unselectedTextColor = TextGrey,
+                                    indicatorColor = DarkCardSurface
+                                )
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == AppTab.DOWNLOADER,
+                                onClick = { viewModel.setTab(AppTab.DOWNLOADER) },
+                                icon = { Icon(Icons.Default.Check, contentDescription = "Yükleyici") },
+                                label = { Text("Yükleyici") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = SpotGreen,
+                                    selectedTextColor = SpotGreen,
+                                    unselectedIconColor = TextGrey,
+                                    unselectedTextColor = TextGrey,
+                                    indicatorColor = DarkCardSurface
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .background(DarkBackground)
+            ) {
+                when (currentTab) {
+                    AppTab.HOME -> HomeTab(viewModel = viewModel)
+                    AppTab.SEARCH -> SearchTab(viewModel = viewModel)
+                    AppTab.LIBRARY -> LibraryTab(viewModel = viewModel)
+                    AppTab.DOWNLOADER -> DownloaderTab(viewModel = viewModel)
                 }
             }
         }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(DarkBackground)
+
+        // Expanding Full Active Screen Player with horizontal/vertical transitions outside scaffold
+        AnimatedVisibility(
+            visible = isPlayerExpanded,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.fillMaxSize()
         ) {
-            when (currentTab) {
-                AppTab.HOME -> HomeTab(viewModel = viewModel)
-                AppTab.SEARCH -> SearchTab(viewModel = viewModel)
-                AppTab.LIBRARY -> LibraryTab(viewModel = viewModel)
-                AppTab.DOWNLOADER -> DownloaderTab(viewModel = viewModel)
-            }
-
-
-
-            // Expanding Full Active Screen Player with horizontal transitions
-            AnimatedVisibility(
-                visible = isPlayerExpanded,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                FullPlayerScreen(
-                    viewModel = viewModel,
-                    onDismiss = { isPlayerExpanded = false }
-                )
-            }
+            FullPlayerScreen(
+                viewModel = viewModel,
+                onDismiss = { isPlayerExpanded = false }
+            )
         }
     }
 }
@@ -1476,7 +1481,11 @@ fun SearchTab(viewModel: FlofysViewModel) {
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
             placeholder = { Text("Şarkı, sanatçı veya albüm ismi...", color = TextGrey, fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextGrey) },
+            leadingIcon = {
+                IconButton(onClick = { viewModel.triggerSearch(searchQuery) }) {
+                    Icon(Icons.Default.Search, contentDescription = "Ara", tint = SpotGreen)
+                }
+            },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
                     IconButton(onClick = { viewModel.updateSearchQuery("") }) {
@@ -1485,6 +1494,10 @@ fun SearchTab(viewModel: FlofysViewModel) {
                 }
             },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = { viewModel.triggerSearch(searchQuery) }
+            ),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = White,
                 unfocusedTextColor = White,

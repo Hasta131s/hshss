@@ -137,6 +137,39 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
                 _currentUserEmail.value = prefs.getString("cached_email", "") ?: ""
                 _isAdmin.value = prefs.getBoolean("cached_is_admin", false)
                 _loginState.value = LoginState.SUCCESS
+                
+                // Silent background login to refresh the PHP session cookie! This is extremely robust!
+                val cachedEmail = prefs.getString("cached_email", "") ?: ""
+                val cachedPassword = prefs.getString("cached_password", "") ?: ""
+                if (cachedEmail.isNotEmpty() && cachedPassword.isNotEmpty()) {
+                    launch(Dispatchers.IO) {
+                        try {
+                            Log.d("FlofysViewModel", "Renewing PHP session in background...")
+                            val response = com.example.api.UserApi.login(cachedEmail, cachedPassword)
+                            val success = response.optBoolean("success", false)
+                            if (success) {
+                                Log.d("FlofysViewModel", "Automated PHP background session renewal was successful!")
+                                val userObj = response.optJSONObject("user")
+                                if (userObj != null) {
+                                    val uid = userObj.optInt("id", cachedUserId)
+                                    val uname = userObj.optString("username", _currentUsername.value)
+                                    val uemail = userObj.optString("email", cachedEmail)
+                                    val isAdm = _isAdmin.value || uemail.lowercase() == "kayra@gmail.com"
+                                    _currentUserId.value = uid
+                                    _currentUsername.value = uname
+                                    _currentUserEmail.value = uemail
+                                    _isAdmin.value = isAdm
+                                    saveCachedUser(uid, uname, uemail, isAdm, cachedPassword)
+                                }
+                            } else {
+                                Log.e("FlofysViewModel", "Background session renewal got response: " + response.optString("message"))
+                            }
+                        } catch (e: Exception) {
+                            Log.e("FlofysViewModel", "Background session renewal error: ", e)
+                        }
+                    }
+                }
+
                 if (_isAdmin.value) {
                     fetchAdminUsersList()
                 }
@@ -161,12 +194,15 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun saveCachedUser(id: Int, username: String, email: String, isAdmin: Boolean) {
+    private fun saveCachedUser(id: Int, username: String, email: String, isAdmin: Boolean, password: String? = null) {
         val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
         prefs.edit().apply {
             putInt("cached_user_id", id)
             putString("cached_username", username)
             putString("cached_email", email)
+            if (password != null) {
+                putString("cached_password", password)
+            }
             putBoolean("cached_is_admin", isAdmin)
             putLong("cached_login_time", System.currentTimeMillis())
             apply()
@@ -192,7 +228,7 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
                     _currentUserEmail.value = userObj.optString("email", emailTxt)
                     val isAdm = emailTxt.lowercase() == "kayra@gmail.com"
                     _isAdmin.value = isAdm
-                    saveCachedUser(uid, userObj.optString("username", usernameTxt), userObj.optString("email", emailTxt), isAdm)
+                    saveCachedUser(uid, userObj.optString("username", usernameTxt), userObj.optString("email", emailTxt), isAdm, passwordTxt)
                     _loginState.value = LoginState.SUCCESS
                     onResult(true, "Kayıt başarıyla tamamlandı ve giriş yapıldı!")
                 } else {
@@ -223,7 +259,7 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
                 _currentUsername.value = uname
                 _currentUserEmail.value = uemail
                 _isAdmin.value = isAdm
-                saveCachedUser(uid, uname, uemail, isAdm)
+                saveCachedUser(uid, uname, uemail, isAdm, passwordTxt)
                 _loginState.value = LoginState.SUCCESS
                 
                 if (isAdm) {
@@ -273,13 +309,31 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateUserProfile(usernameVal: String, emailVal: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            val response = com.example.api.UserApi.updateProfile(usernameVal, emailVal)
-            val success = response.optBoolean("success", false)
-            val message = response.optString("message", "Profil güncellenemedi.")
+            var response = com.example.api.UserApi.updateProfile(usernameVal, emailVal)
+            var success = response.optBoolean("success", false)
+            var message = response.optString("message", "Profil güncellenemedi.")
+            
+            // If session expired, retry with silent background login once
+            if (!success && (message.contains("giriş", ignoreCase = true) || message.contains("login", ignoreCase = true) || message.contains("session", ignoreCase = true))) {
+                val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+                val cachedEmail = prefs.getString("cached_email", "") ?: ""
+                val cachedPassword = prefs.getString("cached_password", "") ?: ""
+                if (cachedEmail.isNotEmpty() && cachedPassword.isNotEmpty()) {
+                    val loginResp = com.example.api.UserApi.login(cachedEmail, cachedPassword)
+                    if (loginResp.optBoolean("success", false)) {
+                        response = com.example.api.UserApi.updateProfile(usernameVal, emailVal)
+                        success = response.optBoolean("success", false)
+                        message = response.optString("message", "Profil güncellenemedi.")
+                    }
+                }
+            }
+
             if (success) {
                 _currentUsername.value = usernameVal
                 _currentUserEmail.value = emailVal
-                saveCachedUser(_currentUserId.value ?: 1, usernameVal, emailVal, _isAdmin.value)
+                val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+                val cachedPass = prefs.getString("cached_password", "") ?: ""
+                saveCachedUser(_currentUserId.value ?: 1, usernameVal, emailVal, _isAdmin.value, cachedPass)
                 onResult(true, "Profiliniz başarıyla güncellendi.")
             } else {
                 onResult(false, message)
@@ -289,10 +343,28 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
 
     fun changeUserPassword(oldPass: String, newPass: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            val response = com.example.api.UserApi.changePassword(oldPass, newPass)
-            val success = response.optBoolean("success", false)
-            val message = response.optString("message", "Şifre değiştirilemedi.")
+            var response = com.example.api.UserApi.changePassword(oldPass, newPass)
+            var success = response.optBoolean("success", false)
+            var message = response.optString("message", "Şifre değiştirilemedi.")
+
+            // If session expired, retry with silent background login once
+            if (!success && (message.contains("giriş", ignoreCase = true) || message.contains("login", ignoreCase = true) || message.contains("session", ignoreCase = true))) {
+                val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+                val cachedEmail = prefs.getString("cached_email", "") ?: ""
+                val cachedPassword = prefs.getString("cached_password", "") ?: ""
+                if (cachedEmail.isNotEmpty() && cachedPassword.isNotEmpty()) {
+                    val loginResp = com.example.api.UserApi.login(cachedEmail, cachedPassword)
+                    if (loginResp.optBoolean("success", false)) {
+                        response = com.example.api.UserApi.changePassword(oldPass, newPass)
+                        success = response.optBoolean("success", false)
+                        message = response.optString("message", "Şifre değiştirilemedi.")
+                    }
+                }
+            }
+
             if (success) {
+                val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+                prefs.edit().putString("cached_password", newPass).apply()
                 onResult(true, "Şifreniz başarıyla değiştirildi.")
             } else {
                 onResult(false, message)
@@ -302,9 +374,25 @@ class FlofysViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deleteUserAccount(userId: Int, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            val response = com.example.api.UserApi.deleteUser(userId)
-            val success = response.optBoolean("success", false)
-            val message = response.optString("message", "Hesap silinemedi.")
+            var response = com.example.api.UserApi.deleteUser(userId)
+            var success = response.optBoolean("success", false)
+            var message = response.optString("message", "Hesap silinemedi.")
+
+            // If session expired, retry with silent background login once
+            if (!success && (message.contains("giriş", ignoreCase = true) || message.contains("login", ignoreCase = true) || message.contains("session", ignoreCase = true))) {
+                val prefs = context.getSharedPreferences("flofys_session_prefs", android.content.Context.MODE_PRIVATE)
+                val cachedEmail = prefs.getString("cached_email", "") ?: ""
+                val cachedPassword = prefs.getString("cached_password", "") ?: ""
+                if (cachedEmail.isNotEmpty() && cachedPassword.isNotEmpty()) {
+                    val loginResp = com.example.api.UserApi.login(cachedEmail, cachedPassword)
+                    if (loginResp.optBoolean("success", false)) {
+                        response = com.example.api.UserApi.deleteUser(userId)
+                        success = response.optBoolean("success", false)
+                        message = response.optString("message", "Hesap silinemedi.")
+                    }
+                }
+            }
+
             if (success) {
                 logoutUser()
                 onResult(true, "Hesabınız başarıyla silindi.")
