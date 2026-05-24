@@ -22,13 +22,223 @@ object FlofysDownloader {
 
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+    private val INVIDIOUS_INSTANCES = listOf(
+        "https://yewtu.be",
+        "https://invidious.privacydev.net",
+        "https://invidious.projectsegfau.lt",
+        "https://iv.melmac.space",
+        "https://invidious.flokinet.to"
+    )
+
+    private val PIPED_INSTANCES = listOf(
+        "https://pipedapi.lunes.host",
+        "https://pipedapi.adminforge.de",
+        "https://pipedapi.kavin.rocks",
+        "https://api.piped.yt"
+    )
+
+    private suspend fun fetchSuggestionsFromInvidious(query: String): List<String> {
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        for (instance in INVIDIOUS_INSTANCES) {
+            try {
+                val url = "$instance/api/v1/search/suggestions?q=$encodedQuery"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        val json = JSONObject(body)
+                        val suggestionsArray = json.optJSONArray("suggestions")
+                        if (suggestionsArray != null && suggestionsArray.length() > 0) {
+                            val list = mutableListOf<String>()
+                            for (i in 0 until suggestionsArray.length()) {
+                                list.add(suggestionsArray.getString(i))
+                            }
+                            Log.d(TAG, "Suggestions successfully loaded from Invidious instance: $instance")
+                            return list
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed suggestions from Invidious instance $instance: ${e.message}")
+            }
+        }
+        return emptyList()
+    }
+
+    private suspend fun fetchSuggestionsFromPiped(query: String): List<String> {
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        for (instance in PIPED_INSTANCES) {
+            try {
+                val url = "$instance/suggestions?query=$encodedQuery"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        val jsonArray = JSONArray(body)
+                        if (jsonArray.length() > 0) {
+                            val list = mutableListOf<String>()
+                            for (i in 0 until jsonArray.length()) {
+                                list.add(jsonArray.getString(i))
+                            }
+                            Log.d(TAG, "Suggestions successfully loaded from Piped instance: $instance")
+                            return list
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed suggestions from Piped instance $instance: ${e.message}")
+            }
+        }
+        return emptyList()
+    }
+
+    private suspend fun searchInvidious(query: String): List<JSONObject> {
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val results = mutableListOf<JSONObject>()
+        for (instance in INVIDIOUS_INSTANCES) {
+            try {
+                val url = "$instance/api/v1/search?q=$encodedQuery&type=video"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        val jsonArray = JSONArray(body)
+                        for (i in 0 until jsonArray.length()) {
+                            val item = jsonArray.optJSONObject(i) ?: continue
+                            val type = item.optString("type", "")
+                            if (type == "video" || type == "stream" || type == "music") {
+                                val videoId = item.optString("videoId", "")
+                                if (videoId.isEmpty()) continue
+                                
+                                val title = item.optString("title", "Unknown Title")
+                                val author = item.optString("author", "Unknown Channel")
+                                val lengthSeconds = item.optInt("lengthSeconds", 0)
+                                val durationText = if (lengthSeconds > 0) {
+                                    val minutes = lengthSeconds / 60
+                                    val seconds = lengthSeconds % 60
+                                    String.format("%d:%02d", minutes, seconds)
+                                } else {
+                                    "3:30"
+                                }
+                                
+                                var thumbnailUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+                                val videoThumbnails = item.optJSONArray("videoThumbnails")
+                                if (videoThumbnails != null && videoThumbnails.length() > 0) {
+                                    for (t in 0 until videoThumbnails.length()) {
+                                        val thumbnail = videoThumbnails.getJSONObject(t)
+                                        if (thumbnail.optString("quality") == "medium") {
+                                            thumbnailUrl = thumbnail.optString("url", thumbnailUrl)
+                                            break
+                                        }
+                                    }
+                                }
+                                
+                                val parsed = JSONObject().apply {
+                                    put("id", videoId)
+                                    put("title", title)
+                                    put("author", author)
+                                    put("durationText", durationText)
+                                    put("thumbnailUrl", thumbnailUrl)
+                                }
+                                results.add(parsed)
+                            }
+                        }
+                        if (results.isNotEmpty()) {
+                            Log.d(TAG, "Search successful via Invidious instance: $instance")
+                            return results
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Search failed for Invidious instance $instance: ${e.message}")
+            }
+        }
+        return results
+    }
+
+    private suspend fun searchPiped(query: String): List<JSONObject> {
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val results = mutableListOf<JSONObject>()
+        for (instance in PIPED_INSTANCES) {
+            try {
+                val url = "$instance/search?q=$encodedQuery&filter=videos"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        val json = JSONObject(body)
+                        val items = json.optJSONArray("items") ?: return@use
+                        for (i in 0 until items.length()) {
+                            val item = items.optJSONObject(i) ?: continue
+                            val type = item.optString("type", "")
+                            if (type == "stream" || type == "video" || type == "music") {
+                                val streamUrl = item.optString("url", "")
+                                val videoId = if (streamUrl.contains("v=")) {
+                                    streamUrl.substringAfter("v=")
+                                } else if (streamUrl.startsWith("/")) {
+                                    streamUrl.substringAfterLast("/")
+                                } else {
+                                    ""
+                                }
+                                if (videoId.isEmpty()) continue
+                                
+                                val title = item.optString("title", "Unknown Title")
+                                val author = item.optString("uploaderName", "Unknown Channel")
+                                val duration = item.optInt("duration", 0)
+                                val durationText = if (duration > 0) {
+                                    val minutes = duration / 60
+                                    val seconds = duration % 60
+                                    String.format("%d:%02d", minutes, seconds)
+                                } else {
+                                    "3:30"
+                                }
+                                
+                                val thumbnailUrl = item.optString("thumbnail", "https://img.youtube.com/vi/$videoId/hqdefault.jpg")
+                                
+                                val parsed = JSONObject().apply {
+                                    put("id", videoId)
+                                    put("title", title)
+                                    put("author", author)
+                                    put("durationText", durationText)
+                                    put("thumbnailUrl", thumbnailUrl)
+                                }
+                                results.add(parsed)
+                            }
+                        }
+                        if (results.isNotEmpty()) {
+                            Log.d(TAG, "Search successful via Piped instance: $instance")
+                            return results
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Search failed for Piped instance $instance: ${e.message}")
+            }
+        }
+        return results
+    }
+
     /**
      * Fetches search recommendations (completions) from Google Suggest Queries (client=firefox -> easy JSON format).
      * Format returned: ["query", ["suggestion1", "suggestion2", ...]]
      */
     suspend fun fetchSuggestions(query: String): List<String> {
         if (query.isBlank()) return emptyList()
-        return try {
+        
+        // 1. Try Google suggests
+        try {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val url = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=$encodedQuery"
             val request = Request.Builder()
@@ -37,23 +247,32 @@ object FlofysDownloader {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return emptyList()
-                val body = response.body?.string() ?: return emptyList()
-                val jsonArray = JSONArray(body)
-                if (jsonArray.length() >= 2) {
-                    val suggestionsArray = jsonArray.getJSONArray(1)
-                    val list = mutableListOf<String>()
-                    for (i in 0 until suggestionsArray.length()) {
-                        list.add(suggestionsArray.getString(i))
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    val jsonArray = JSONArray(body)
+                    if (jsonArray.length() >= 2) {
+                        val suggestionsArray = jsonArray.getJSONArray(1)
+                        val list = mutableListOf<String>()
+                        for (i in 0 until suggestionsArray.length()) {
+                            list.add(suggestionsArray.getString(i))
+                        }
+                        if (list.isNotEmpty()) {
+                            Log.d(TAG, "Suggestions successfully loaded from Google Suggest.")
+                            return list
+                        }
                     }
-                    list
-                } else {
-                    emptyList()
                 }
             }
         } catch (e: Exception) {
-            emptyList()
+            Log.e(TAG, "Google Suggest failure: ${e.message}")
         }
+
+        // 2. Fallback to Invidious suggestions
+        val invidiousResult = fetchSuggestionsFromInvidious(query)
+        if (invidiousResult.isNotEmpty()) return invidiousResult
+
+        // 3. Fallback to Piped suggestions
+        return fetchSuggestionsFromPiped(query)
     }
 
     /**
@@ -62,6 +281,8 @@ object FlofysDownloader {
     suspend fun searchYouTube(query: String): List<JSONObject> {
         val results = mutableListOf<JSONObject>()
         if (query.isBlank()) return results
+        
+        // 1. Try scraping YouTube
         try {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val url = "https://www.youtube.com/results?search_query=$encodedQuery"
@@ -71,36 +292,43 @@ object FlofysDownloader {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return results
-                val html = response.body?.string() ?: return results
+                if (response.isSuccessful) {
+                    val html = response.body?.string() ?: ""
+                    val marker = "var ytInitialData = "
+                    val startIdx = html.indexOf(marker)
+                    if (startIdx != -1) {
+                        val actualStart = startIdx + marker.length
+                        var endIdx = html.indexOf(";</script>", actualStart)
+                        if (endIdx == -1) {
+                            endIdx = html.indexOf("};", actualStart)
+                        }
+                        if (endIdx == -1) {
+                            endIdx = html.indexOf("</script>", actualStart)
+                        }
 
-                // Extract ytInitialData = { ... };
-                val marker = "var ytInitialData = "
-                val startIdx = html.indexOf(marker)
-                if (startIdx == -1) return results
-
-                val actualStart = startIdx + marker.length
-                // Find closing script tag or ending semicolon
-                var endIdx = html.indexOf(";</script>", actualStart)
-                if (endIdx == -1) {
-                    endIdx = html.indexOf("};", actualStart)
-                }
-                if (endIdx == -1) {
-                    endIdx = html.indexOf("</script>", actualStart)
-                }
-
-                if (endIdx != -1) {
-                    val rawJson = html.substring(actualStart, endIdx).trim()
-                    val cleanedJson = if (rawJson.endsWith(";")) rawJson.substring(0, rawJson.length - 1) else rawJson
-                    
-                    val initialData = JSONObject(cleanedJson)
-                    results.addAll(extractVideosFromYtInitialData(initialData))
+                        if (endIdx != -1) {
+                            val rawJson = html.substring(actualStart, endIdx).trim()
+                            val cleanedJson = if (rawJson.endsWith(";")) rawJson.substring(0, rawJson.length - 1) else rawJson
+                            val initialData = JSONObject(cleanedJson)
+                            val list = extractVideosFromYtInitialData(initialData)
+                            if (list.isNotEmpty()) {
+                                Log.d(TAG, "Search successful via direct YouTube scrape.")
+                                return list
+                            }
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
-            // Quiet, safe handling
+            Log.e(TAG, "YouTube Scrape Failure: ${e.message}")
         }
-        return results
+
+        // 2. Try Invidious API
+        val invidiousResult = searchInvidious(query)
+        if (invidiousResult.isNotEmpty()) return invidiousResult
+
+        // 3. Try Piped API
+        return searchPiped(query)
     }
 
     private fun extractVideosFromYtInitialData(root: JSONObject): List<JSONObject> {

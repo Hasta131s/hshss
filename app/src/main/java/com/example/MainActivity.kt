@@ -687,9 +687,9 @@ fun MiniPlayerRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
             .clickable { onClicked() },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface.copy(alpha = 0.95f)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
     ) {
@@ -697,7 +697,7 @@ fun MiniPlayerRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
@@ -705,18 +705,18 @@ fun MiniPlayerRow(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(6.dp))
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = "Şu an çalıyor: ${track.title}",
+                        text = track.title,
                         color = White,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -724,7 +724,7 @@ fun MiniPlayerRow(
                     Text(
                         text = track.author,
                         color = TextGrey,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -734,25 +734,31 @@ fun MiniPlayerRow(
                     CircularProgressIndicator(
                         color = SpotGreen,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 } else {
-                    IconButton(onClick = { PlaybackManager.togglePlayPause(context) }) {
+                    IconButton(
+                        onClick = { PlaybackManager.togglePlayPause(context) },
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Oynat/Durdur",
                             tint = White,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
 
-                IconButton(onClick = { PlaybackManager.skipToNext(context) }) {
+                IconButton(
+                    onClick = { PlaybackManager.skipToNext(context) },
+                    modifier = Modifier.size(36.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Sıradaki",
                         tint = White,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -762,7 +768,7 @@ fun MiniPlayerRow(
                 progress = progress,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(2.6.dp),
+                    .height(2.dp),
                 color = SpotGreen,
                 trackColor = Color.White.copy(alpha = 0.08f)
             )
