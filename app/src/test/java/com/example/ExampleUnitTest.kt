@@ -2,6 +2,8 @@ package com.example
 
 import com.example.api.FlofysDownloader
 import kotlinx.coroutines.runBlocking
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,6 +21,88 @@ class ExampleUnitTest {
   @Test
   fun addition_isCorrect() {
     assertEquals(4, 2 + 2)
+  }
+
+  @Test
+  fun testWidgetPlus() = runBlocking {
+    val videoId = "60ItHLz5WEA"
+    val videoUrl = "https://www.youtube.com/watch?v=$videoId"
+    val encodedUrl = java.net.URLEncoder.encode(videoUrl, "UTF-8")
+    
+    val widgetUrl = "https://api.ytmp3.tube/widgetplus?url=$encodedUrl&title=Video+Download"
+    val client = okhttp3.OkHttpClient()
+    val req1 = okhttp3.Request.Builder()
+        .url(widgetUrl)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("Referer", "https://yt5s.to/")
+        .build()
+
+    println("--- START WIDGETPLUS TEST ---")
+    try {
+      client.newCall(req1).execute().use { res1 ->
+        val html = res1.body?.string() ?: ""
+        println("Response code: ${res1.code}")
+        
+        // Use flexible extraction
+        val idMarker = "id=\"widget-data\""
+        val idIdx = html.indexOf(idMarker)
+        if (idIdx == -1) {
+          println("FAIL: idMarker not found")
+          return@use
+        }
+        
+        val contentStart = html.indexOf(">", idIdx) + 1
+        val jsonEnd = html.indexOf("</script>", contentStart)
+        if (jsonEnd == -1) {
+          println("FAIL: jsonEnd not found")
+          return@use
+        }
+        
+        val rawWidgetData = html.substring(contentStart, jsonEnd).trim()
+        println("Extracted json data: $rawWidgetData")
+        
+        val data = org.json.JSONObject(rawWidgetData)
+        val vId = data.optString("videoId")
+        val token = data.optString("token")
+        val timestamp = data.optString("timestamp")
+        val secretToken = data.optString("encryptedVideoId")
+        
+        println("Parsed widget-data: videoId=$vId, token=$token, timestamp=$timestamp, secretToken=$secretToken")
+        
+        // 2. Query target conversion to MP3 link (forcing quality "64" to be lightweight)
+        val endpointUrl = "https://api.ytmp3.tube/api/download/mp3"
+        val jsonPayload = org.json.JSONObject().apply {
+          put("id", vId)
+          put("token", token)
+          put("timestamp", timestamp)
+          put("secretToken", secretToken)
+          put("audioBitrate", "64")
+        }
+
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val reqBody = jsonPayload.toString().toRequestBody(mediaType)
+
+        val req2 = okhttp3.Request.Builder()
+            .url(endpointUrl)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Content-Type", "application/json")
+            .header("Referer", "https://api.ytmp3.tube/widgetplus?url=${encodedUrl}")
+            .post(reqBody)
+            .build()
+
+        client.newCall(req2).execute().use { res2 ->
+          println("Download response code: ${res2.code}")
+          val body = res2.body?.string() ?: ""
+          println("Download response body: $body")
+          
+          val resultObj = org.json.JSONObject(body)
+          val link = resultObj.optString("link")
+          println("FINAL DIRECT LINK: $link")
+        }
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
   }
 
   @Test

@@ -182,11 +182,12 @@ object FlofysDownloader {
                 if (!res1.isSuccessful) return null
                 val html = res1.body?.string() ?: return null
 
-                // Search for: <script id="widget-data"> { ... } </script>
-                val startTag = "<script id=\"widget-data\">"
-                val startIdx = html.indexOf(startTag)
-                if (startIdx != -1) {
-                    val contentStart = startIdx + startTag.length
+                var idIdx = html.indexOf("id=\"widget-data\"")
+                if (idIdx == -1) {
+                    idIdx = html.indexOf("id='widget-data'")
+                }
+                if (idIdx != -1) {
+                    val contentStart = html.indexOf(">", idIdx) + 1
                     val endTag = "</script>"
                     val endIdx = html.indexOf(endTag, contentStart)
                     if (endIdx != -1) {
