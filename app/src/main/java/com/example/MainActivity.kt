@@ -687,17 +687,17 @@ fun MiniPlayerRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
             .clickable { onClicked() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface.copy(alpha = 0.95f)),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF18181A)),
+        border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.09f))
     ) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
@@ -705,26 +705,27 @@ fun MiniPlayerRow(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(6.dp))
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.2.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
                         text = track.title,
                         color = White,
-                        fontSize = 12.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = track.author,
                         color = TextGrey,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -734,31 +735,37 @@ fun MiniPlayerRow(
                     CircularProgressIndicator(
                         color = SpotGreen,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(24.dp)
                     )
+                    Spacer(modifier = Modifier.width(10.dp))
                 } else {
                     IconButton(
                         onClick = { PlaybackManager.togglePlayPause(context) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(Color.White.copy(alpha = 0.04f), CircleShape)
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Oynat/Durdur",
-                            tint = White,
-                            modifier = Modifier.size(24.dp)
+                            tint = SpotGreen,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
 
                 IconButton(
                     onClick = { PlaybackManager.skipToNext(context) },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(Color.White.copy(alpha = 0.04f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Sıradaki",
                         tint = White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -768,9 +775,9 @@ fun MiniPlayerRow(
                 progress = progress,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(2.dp),
+                    .height(2.5.dp),
                 color = SpotGreen,
-                trackColor = Color.White.copy(alpha = 0.08f)
+                trackColor = Color.White.copy(alpha = 0.1f)
             )
         }
     }
@@ -2057,7 +2064,46 @@ fun FullPlayerScreen(
     val currentTrack = track!!
 
     val recommendedTracks = remember(searchResults, currentTrack) {
-        searchResults.filter { it.id != currentTrack.id }
+        val scoredList = searchResults.filter { it.id != currentTrack.id }
+            .map { candidate ->
+                var score = 0
+                val candAuthor = candidate.author.lowercase().trim()
+                val currAuthor = currentTrack.author.lowercase().trim()
+                
+                // Match by artist
+                if (candAuthor == currAuthor) {
+                    score += 50
+                } else if (candAuthor.contains(currAuthor) || currAuthor.contains(candAuthor)) {
+                    score += 25
+                }
+                
+                // Match by title keywords
+                val candTitle = candidate.title.lowercase()
+                val currTitleCleaned = currentTrack.title.lowercase()
+                    .replace(Regex("[^a-zA-Z0-9ğüşıöçâîû\\s]"), " ")
+                val words = currTitleCleaned.split("\\s+".toRegex()).filter { it.length >= 3 }
+                
+                var matchedWords = 0
+                for (word in words) {
+                    if (candTitle.contains(word)) {
+                        matchedWords++
+                        score += 15
+                    }
+                }
+                
+                candidate to score
+            }
+        
+        val matchedOnly = scoredList.filter { it.second > 0 }
+            .sortedByDescending { it.second }
+            .map { it.first }
+            
+        if (matchedOnly.isNotEmpty()) {
+            matchedOnly
+        } else {
+            // Fallback to standard other results if no direct similarity matches are found
+            searchResults.filter { it.id != currentTrack.id }
+        }
     }
 
     Box(
@@ -3009,7 +3055,7 @@ fun UsageAgreementDialog(
                     text = "1. GİRİŞ VE HİZMET KAPSAMI\n" +
                            "İshbu Kullanım Sözleşmesi ve Kullanıcı Lisans Anlaşması, Flofys Inc. (\"Şirket\") tarafından geliştirilen ve yönetilen Flofys Oynatıcı Platformu (\"Uygulama\") üzerinden sağlanan tüm dijital servislerin, arayüzlerin ve veritabanı altyapılarının kullanım şartlarını yasal olarak düzenlemektedir. Uygulamayı akıllı cihazınıza indirerek, bir kullanıcı hesabı oluşturarak veya herhangi bir hizmete erişim sağlayarak işbu sözleşmenin tüm şartlarını ve eklerini kayıtsız şartsız okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan etmiş olursunuz. Flofys, kişiselleştirilmiş çevrimdışı arşivleme teknolojilerini barındıran lisanslı bir platformdur.\n\n" +
                            "2. FİKRİ MÜLKİYET, TELİF HAKLARI VE MEDYA POLİTİKASI\n" +
-                           "Flofys, üçüncü taraf ağlardan veya kamuya açık veri akış sağlayıcılarından (YouTube, JioSavan ve diğer genel API servisleri) elde ettiği hiçbir medya içeriğini kendi sunucularında depolamaz veya doğrudan barındırmaz. Uygulama, kullanıcının anlık talepleri üzerine ilgili platformlardaki kaynaklara yönlendirici ağ köprüleri kuran ve dijital medya oynatımı sunan bir aracı oynatıcı yazılımdır. Platformda görüntülenen tüm ticari markalar, logolar, müzik eserleri, sanatçı isimleri ve albüm kapak tasarımları asli hak sahiplerine aittir. Kullanıcı, sunulan dijital içerikleri yalnızca bireysel, ticari olmayan kişisel arşivleme ve eğitim amaçları kapsamında kullanabilir. İçeriklerin ticari yayınlarda kullanılması, çoğaltılması veya kâr elde etme amacıyla dağıtılması kesinlikle yasaktır.\n\n" +
+                           "Flofys, üçüncü taraf ağlardan veya kamuya açık veri akış sağlayıcılarından (YouTube ve diğer genel API servisleri) elde ettiği hiçbir medya içeriğini kendi sunucularında depolamaz veya doğrudan barındırmaz. Uygulama, kullanıcının anlık talepleri üzerine ilgili platformlardaki kaynaklara yönlendirici ağ köprüleri kuran ve dijital medya oynatımı sunan bir aracı oynatıcı yazılımdır. Platformda görüntülenen tüm ticari markalar, logolar, müzik eserleri, sanatçı isimleri ve albüm kapak tasarımları asli hak sahiplerine aittir. Kullanıcı, sunulan dijital içerikleri yalnızca bireysel, ticari olmayan kişisel arşivleme ve eğitim amaçları kapsamında kullanabilir. İçeriklerin ticari yayınlarda kullanılması, çoğaltılması veya kâr elde etme amacıyla dağıtılması kesinlikle yasaktır.\n\n" +
                            "3. KİŞİSEL VERİLERİN KORUNMASI VE KVKK BEYANNAMESİ\n" +
                            "Şirketimiz, 6698 Sayılı Kişisel Verilerin Korunması Kanunu (\"KVKK\") uyarınca veri sorumlusu sıfatıyla hareket etmekte ve en yüksek seviyede bilgi güvenliği tedbirleri uygulamaktadır. Kayıt işlemi sırasında tarafınızca sağlanan kullanıcı adı, şifrelenmiş e-posta adresi ve platform içi kullanım geçmişi verileri, SHA-256 kriptografik katmanları ile şifrelenerek güvenli sunucularımızda saklanmaktadır. Bu bilgiler yalnızca sistem güvenliği, çalma listesi senkronizasyonu ve yetkisiz erişim teşebbüslerinin önlenmesi amacıyla işlenmektedir. Şirketimiz, kişisel verilerinizi üçüncü taraflarla, reklam ajanslarıyla veya ticari kurumlarla hiçbir koşulda paylaşmamayı, satmamayı taahhüt eder.\n\n" +
                            "4. YASAL BEYANNAME VE SORUMLULUK SINIRLANDIRILMASI\n" +

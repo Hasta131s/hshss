@@ -22,14 +22,6 @@ object FlofysDownloader {
 
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-    private val jioDownloadUrlCache = java.util.concurrent.ConcurrentHashMap<String, String>()
-
-    private val JIOSAVAN_BACKENDS = listOf(
-        "https://jiosavan-api2.vercel.app/api",
-        "https://music-backend-dup.vercel.app/api",
-        "https://backend-music-henna.vercel.app/api"
-    )
-
     private val INVIDIOUS_INSTANCES = listOf(
         "https://yewtu.be",
         "https://invidious.privacydev.net",
@@ -44,127 +36,6 @@ object FlofysDownloader {
         "https://pipedapi.kavin.rocks",
         "https://api.piped.yt"
     )
-
-    private suspend fun searchJioSavan(query: String): List<JSONObject> {
-        val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val results = mutableListOf<JSONObject>()
-        for (instance in JIOSAVAN_BACKENDS) {
-            try {
-                val url = "$instance/search/songs?query=$encodedQuery"
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Origin", "https://listenfree.in")
-                    .header("Referer", "https://listenfree.in/")
-                    .build()
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string() ?: return@use
-                        val json = JSONObject(body)
-                        if (json.optBoolean("success", false)) {
-                            val dataObj = json.optJSONObject("data")
-                            if (dataObj != null) {
-                                val resultsArray = dataObj.optJSONArray("results")
-                                if (resultsArray != null) {
-                                    for (i in 0 until resultsArray.length()) {
-                                        val song = resultsArray.optJSONObject(i) ?: continue
-                                        val id = song.optString("id", "")
-                                        if (id.isEmpty()) continue
-                                        
-                                        val name = song.optString("name", "Unknown Title")
-                                        val artist = song.optString("primaryArtists", "Unknown Artist")
-                                        val durationSec = song.optInt("duration", 0)
-                                        val durationText = if (durationSec > 0) {
-                                            val minutes = durationSec / 60
-                                            val seconds = durationSec % 60
-                                            String.format("%d:%02d", minutes, seconds)
-                                        } else {
-                                            "3:30"
-                                        }
-                                        
-                                        // Image url
-                                        var imgUrl = "https://img.youtube.com/vi/placeholder/hqdefault.jpg"
-                                        val imgArray = song.optJSONArray("image")
-                                        if (imgArray != null && imgArray.length() > 0) {
-                                            val lastImg = imgArray.getJSONObject(imgArray.length() - 1)
-                                            imgUrl = lastImg.optString("link", imgUrl)
-                                        }
-                                        
-                                        // Cache direct stream link
-                                        val dlArray = song.optJSONArray("downloadUrl")
-                                        if (dlArray != null && dlArray.length() > 0) {
-                                            val lastDl = dlArray.getJSONObject(dlArray.length() - 1)
-                                            val dlLink = lastDl.optString("link", "")
-                                            if (dlLink.isNotEmpty()) {
-                                                jioDownloadUrlCache[id] = dlLink
-                                            }
-                                        }
-                                        
-                                        val parsed = JSONObject().apply {
-                                            put("id", id)
-                                            put("title", name)
-                                            put("author", artist)
-                                            put("durationText", durationText)
-                                            put("thumbnailUrl", imgUrl)
-                                        }
-                                        results.add(parsed)
-                                    }
-                                }
-                            }
-                        }
-                        if (results.isNotEmpty()) {
-                            Log.d(TAG, "Search successful via JioSavan instance: $url")
-                            return results
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Search failed for JioSavan instance $instance: ${e.message}")
-            }
-        }
-        return results
-    }
-
-    private suspend fun fetchJioSavanSongDetailsLink(songId: String): String? {
-        val cached = jioDownloadUrlCache[songId]
-        if (cached != null) return cached
-        
-        for (instance in JIOSAVAN_BACKENDS) {
-            try {
-                val url = "$instance/songs/$songId"
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Origin", "https://listenfree.in")
-                    .header("Referer", "https://listenfree.in/")
-                    .build()
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string() ?: return@use
-                        val json = JSONObject(body)
-                        if (json.optBoolean("success", false)) {
-                            val dataArray = json.optJSONArray("data")
-                            if (dataArray != null && dataArray.length() > 0) {
-                                val details = dataArray.getJSONObject(0)
-                                val dlArray = details.optJSONArray("downloadUrl")
-                                if (dlArray != null && dlArray.length() > 0) {
-                                    val lastDl = dlArray.getJSONObject(dlArray.length() - 1)
-                                    val dlLink = lastDl.optString("link", "")
-                                    if (dlLink.isNotEmpty()) {
-                                        jioDownloadUrlCache[songId] = dlLink
-                                        return dlLink
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed JioSavan details for $songId: ${e.message}")
-            }
-        }
-        return null
-    }
 
     private suspend fun fetchSuggestionsFromInvidious(query: String): List<String> {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
@@ -405,24 +276,13 @@ object FlofysDownloader {
     }
 
     /**
-     * Searches YouTube by scraping ytInitialData from results. Fallbacks to JioSavan.
+     * Searches YouTube by scraping ytInitialData from results. fallback to Invidious/Piped.
      */
     suspend fun searchYouTube(query: String): List<JSONObject> {
         val results = mutableListOf<JSONObject>()
         if (query.isBlank()) return results
-
-        // 1. Try JioSavan first as it is lightning fast, has perfect high-res covers and NEVER gets IP banned.
-        try {
-            val jioResult = searchJioSavan(query)
-            if (jioResult.isNotEmpty()) {
-                Log.d(TAG, "Search successful via JioSavan API.")
-                return jioResult
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "JioSavan Search failure: ${e.message}")
-        }
         
-        // 2. Try scraping YouTube
+        // 1. Try scraping YouTube
         try {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val url = "https://www.youtube.com/results?search_query=$encodedQuery"
@@ -463,11 +323,11 @@ object FlofysDownloader {
             Log.e(TAG, "YouTube Scrape Failure: ${e.message}")
         }
 
-        // 3. Try Invidious API
+        // 2. Try Invidious API
         val invidiousResult = searchInvidious(query)
         if (invidiousResult.isNotEmpty()) return invidiousResult
 
-        // 4. Try Piped API
+        // 3. Try Piped API
         return searchPiped(query)
     }
 
@@ -535,13 +395,6 @@ object FlofysDownloader {
      * or JioSavan if applicable.
      */
     suspend fun getMp3DownloadLink(videoId: String): String? {
-        val cached = jioDownloadUrlCache[videoId]
-        if (cached != null) return cached
-
-        // 1. Check if JioSavan database contains this ID
-        val jioUrl = fetchJioSavanSongDetailsLink(videoId)
-        if (jioUrl != null) return jioUrl
-
         val videoUrl = "https://www.youtube.com/watch?v=$videoId"
         try {
             // 2. Fetch Widget Data
