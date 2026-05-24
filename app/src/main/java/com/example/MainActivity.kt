@@ -1163,7 +1163,7 @@ fun HomeTab(viewModel: FlofysViewModel) {
                     if (showLogs) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "🚀 v2.4.0 (Güncel)\n• Profesyonel ve kurumsal Kayıt & Giriş sistemi eklendi.\n• Şifre gücü göstergesi ve şifre doğrulama eklendi.\n• Çok paged (sanal sayfalamalı) ve hızlı Admin Yönetim Paneli eklendi.\n• Yönetici için kullanıcı arama, silme ve kullanıcı verilerini uzaktan güncelleme eklendi.\n• Top-right profil kontrol konsolu entegre edildi.\n• Lisans, telif hakları ve kullanım sözleşmeleri eklendi.\n\n⚡ v2.0.0\n• YT5S API üzerinden hızlı MP3 çevirme ve akıllı müzik indirme motoru eklendi.\n• Çevrimdışı oynatma listeleri ve yerel veritabanı kararlılık geliştirmesi.",
+                            text = "🚀 v2.4.0 (Güncel)\n• Güvenli ve pratik Kayıt & Giriş paneli eklendi.\n• Şifre güvenliği kontrol sistemi entegre edildi.\n• Sağ üst profil yönetim konsolu eklendi.\n• Kurumsal lisans, telif hakları beyanı ve kullanım sözleşmesi güncellendi.\n• Performans ve arayüz akıcılığı büyük ölçüde artırıldı.\n\n⚡ v2.0.0\n• Gelişmiş, yüksek hızlı müzik arama ve kesintisiz akış motoru eklendi.\n• Çevrimdışı oynatma listeleri ve yerel depolama altyapısı optimize edildi.",
                             color = TextGrey,
                             fontSize = 12.sp,
                             lineHeight = 18.sp
@@ -2044,15 +2044,21 @@ fun FullPlayerScreen(
     val loopMode by PlaybackManager.loopMode.collectAsStateWithLifecycle()
     val queue by PlaybackManager.playbackQueue.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
 
     var isAddToPlaylistOpen by remember { mutableStateOf(false) }
     var expandedQueueState by remember { mutableStateOf(false) }
+    var sliderDraggingValue by remember { mutableStateOf<Float?>(null) }
 
     val context = LocalContext.current
 
     if (track == null) return
 
     val currentTrack = track!!
+
+    val recommendedTracks = remember(searchResults, currentTrack) {
+        searchResults.filter { it.id != currentTrack.id }
+    }
 
     Box(
         modifier = Modifier
@@ -2171,12 +2177,19 @@ fun FullPlayerScreen(
                     modifier = Modifier.padding(14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    val currentProgressValue = sliderDraggingValue ?: progress
+                    val currentDisplayPosMs = if (sliderDraggingValue != null) (sliderDraggingValue!! * durMs).toInt() else posMs
+
                     // Progress Slider
                     Slider(
-                        value = progress,
+                        value = currentProgressValue,
                         onValueChange = { percent ->
-                            val pos = (percent * durMs).toInt()
-                            PlaybackManager.seekTo(pos)
+                            sliderDraggingValue = percent
+                        },
+                        onValueChangeFinished = {
+                            val targetMilli = ((sliderDraggingValue ?: progress) * durMs).toInt()
+                            PlaybackManager.seekTo(targetMilli)
+                            sliderDraggingValue = null
                         },
                         colors = SliderDefaults.colors(
                             thumbColor = SpotGreen,
@@ -2194,7 +2207,7 @@ fun FullPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = formatMs(posMs),
+                            text = formatMs(currentDisplayPosMs),
                             color = TextGrey,
                             fontSize = 11.sp
                         )
@@ -2284,7 +2297,7 @@ fun FullPlayerScreen(
                         IconButton(onClick = { PlaybackManager.rewind10s() }) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "-10s", tint = TextGrey, modifier = Modifier.size(16.dp))
-                                Text("10s", color = TextGrey, fontSize = 10.sp)
+                                Text("10s-", color = TextGrey, fontSize = 10.sp)
                             }
                         }
                         Spacer(modifier = Modifier.width(28.dp))
@@ -2348,6 +2361,74 @@ fun FullPlayerScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // RECOMMENDED SONGS SECTION (Önerilen Parçalar)
+            if (recommendedTracks.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "Önerilen Parçalar",
+                    color = White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.Start)
+                        .padding(start = 4.dp, bottom = 10.dp)
+                )
+                recommendedTracks.take(4).forEach { playbackTrack ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                PlaybackManager.playTrackAlone(playbackTrack, context)
+                            },
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = playbackTrack.thumbnailUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(6.dp))
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = playbackTrack.title,
+                                    color = White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = playbackTrack.author,
+                                    color = TextGrey,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Oynat",
+                                tint = SpotGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
@@ -2925,9 +3006,14 @@ fun UsageAgreementDialog(
                 )
                 
                 Text(
-                    text = "1. GİRİŞ VE HİZMET KAPSAMI\nBu uygulama, açık kaynaklı eğitim araçları ve kişiselleştirilmiş çevrimdışı ses depolama teknolojilerine dayalı bir oynatıcı platformudur. Lisans sahibi, uygulamadan edindiği dosyaları ticari ve kâr amaçlı yayınlarda veya çoğaltımlarda kullanamaz.\n\n" +
-                           "2. YOUTUBE VE VERİ ÇEKME POLİTİKASI\nUygulama, internet üzerindeki kamuya açık video API'lerini kullanarak ses akış köprüleri kurmaktadır. Tüm lisans hakları ve telifler, ilgili içerik üreticilerine ve barındırma servislerine aittir. Flofys, içeriklerin mülkiyetini iddia etmez.\n\n" +
-                           "3. KİŞİSEL VERİLERİN KORUNMASI (KVKK)\nKayıt olurken paylaştığınız kullanıcı adı, e-posta adresi ve şifre gibi bilgiler yalnızca hesap entegrasyonu ve çalma listesi senkronizasyonu amacıyla bosforlab sunucularında şifreli olarak barındırılır. Verileriniz hiçbir şekilde 3. şahıslarla paylaşılmaz ya da reklam ağlarına aktarılmaz.",
+                    text = "1. GİRİŞ VE HİZMET KAPSAMI\n" +
+                           "İshbu Kullanım Sözleşmesi ve Kullanıcı Lisans Anlaşması, Flofys Inc. (\"Şirket\") tarafından geliştirilen ve yönetilen Flofys Oynatıcı Platformu (\"Uygulama\") üzerinden sağlanan tüm dijital servislerin, arayüzlerin ve veritabanı altyapılarının kullanım şartlarını yasal olarak düzenlemektedir. Uygulamayı akıllı cihazınıza indirerek, bir kullanıcı hesabı oluşturarak veya herhangi bir hizmete erişim sağlayarak işbu sözleşmenin tüm şartlarını ve eklerini kayıtsız şartsız okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan etmiş olursunuz. Flofys, kişiselleştirilmiş çevrimdışı arşivleme teknolojilerini barındıran lisanslı bir platformdur.\n\n" +
+                           "2. FİKRİ MÜLKİYET, TELİF HAKLARI VE MEDYA POLİTİKASI\n" +
+                           "Flofys, üçüncü taraf ağlardan veya kamuya açık veri akış sağlayıcılarından (YouTube, JioSavan ve diğer genel API servisleri) elde ettiği hiçbir medya içeriğini kendi sunucularında depolamaz veya doğrudan barındırmaz. Uygulama, kullanıcının anlık talepleri üzerine ilgili platformlardaki kaynaklara yönlendirici ağ köprüleri kuran ve dijital medya oynatımı sunan bir aracı oynatıcı yazılımdır. Platformda görüntülenen tüm ticari markalar, logolar, müzik eserleri, sanatçı isimleri ve albüm kapak tasarımları asli hak sahiplerine aittir. Kullanıcı, sunulan dijital içerikleri yalnızca bireysel, ticari olmayan kişisel arşivleme ve eğitim amaçları kapsamında kullanabilir. İçeriklerin ticari yayınlarda kullanılması, çoğaltılması veya kâr elde etme amacıyla dağıtılması kesinlikle yasaktır.\n\n" +
+                           "3. KİŞİSEL VERİLERİN KORUNMASI VE KVKK BEYANNAMESİ\n" +
+                           "Şirketimiz, 6698 Sayılı Kişisel Verilerin Korunması Kanunu (\"KVKK\") uyarınca veri sorumlusu sıfatıyla hareket etmekte ve en yüksek seviyede bilgi güvenliği tedbirleri uygulamaktadır. Kayıt işlemi sırasında tarafınızca sağlanan kullanıcı adı, şifrelenmiş e-posta adresi ve platform içi kullanım geçmişi verileri, SHA-256 kriptografik katmanları ile şifrelenerek güvenli sunucularımızda saklanmaktadır. Bu bilgiler yalnızca sistem güvenliği, çalma listesi senkronizasyonu ve yetkisiz erişim teşebbüslerinin önlenmesi amacıyla işlenmektedir. Şirketimiz, kişisel verilerinizi üçüncü taraflarla, reklam ajanslarıyla veya ticari kurumlarla hiçbir koşulda paylaşmamayı, satmamayı taahhüt eder.\n\n" +
+                           "4. YASAL BEYANNAME VE SORUMLULUK SINIRLANDIRILMASI\n" +
+                           "Flofys, sunulan arama ve oynatma hizmetlerinin tamamen kesintisiz, hatasız veya her an tam kapasiteyle çalışacağını taahhüt etmez. Harici sunucularda veya harici API sistemlerinde meydana gelebilecek kesintiler, bölgesel IP engellemeleri ya da lisans kısıtlamalarından kaynaklı dijital veri kayıplarından Flofys sorumlu tutulamaz. Şirket, işbu sözleşme koşullarını önceden bildirmeksizin tek taraflı olarak güncelleme ve servis şartlarını değiştirme hakkını saklı tutar.",
                     color = TextGrey,
                     fontSize = 11.sp,
                     lineHeight = 16.sp
