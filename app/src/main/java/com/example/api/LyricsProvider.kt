@@ -23,54 +23,52 @@ object LyricsProvider {
     /**
      * Searches Genius and retrieves the lyrics text.
      */
-    suspend fun fetchLyrics(artist: String, title: String, forceGenius: Boolean = false): String = withContext(Dispatchers.IO) {
+    suspend fun fetchLyrics(artist: String, title: String): String = withContext(Dispatchers.IO) {
         val cleanedTitle = title.replace(Regex("(?i)lyrics|lyric|video|audio|official|\\(.*?\\)|\\[.*?\\]"), "").trim()
         val cleanedArtist = artist.replace(Regex("(?i)unknown"), "").trim()
         
-        if (!forceGenius) {
-            // 1. Try lrclib.net first (provides synced and plain lyrics)
-            try {
-                val url = okhttp3.HttpUrl.Builder()
-                    .scheme("https")
-                    .host("lrclib.net")
-                    .addPathSegment("api")
-                    .addPathSegment("search")
-                    .addQueryParameter("track_name", cleanedTitle)
-                    .apply {
-                        if (cleanedArtist.isNotBlank()) addQueryParameter("artist_name", cleanedArtist)
-                    }
-                    .build()
-                    
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", USER_AGENT)
-                    .build()
-                    
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val bodyStr = response.body?.string()
-                        if (bodyStr != null) {
-                            val jsonArray = org.json.JSONArray(bodyStr)
-                            if (jsonArray.length() > 0) {
-                                val firstObj = jsonArray.getJSONObject(0)
-                                val synced = if (firstObj.has("syncedLyrics") && !firstObj.isNull("syncedLyrics")) firstObj.getString("syncedLyrics") else null
-                                val plain = if (firstObj.has("plainLyrics") && !firstObj.isNull("plainLyrics")) firstObj.getString("plainLyrics") else null
-                                
-                                if (!synced.isNullOrBlank()) {
-                                    return@withContext synced
-                                } else if (!plain.isNullOrBlank()) {
-                                    return@withContext plain
-                                }
+        // 1. Try lrclib.net first (provides synced and plain lyrics)
+        try {
+            val url = okhttp3.HttpUrl.Builder()
+                .scheme("https")
+                .host("lrclib.net")
+                .addPathSegment("api")
+                .addPathSegment("search")
+                .addQueryParameter("track_name", cleanedTitle)
+                .apply {
+                    if (cleanedArtist.isNotBlank()) addQueryParameter("artist_name", cleanedArtist)
+                }
+                .build()
+                
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", USER_AGENT)
+                .build()
+                
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bodyStr = response.body?.string()
+                    if (bodyStr != null) {
+                        val jsonArray = org.json.JSONArray(bodyStr)
+                        if (jsonArray.length() > 0) {
+                            val firstObj = jsonArray.getJSONObject(0)
+                            val synced = if (firstObj.has("syncedLyrics") && !firstObj.isNull("syncedLyrics")) firstObj.getString("syncedLyrics") else null
+                            val plain = if (firstObj.has("plainLyrics") && !firstObj.isNull("plainLyrics")) firstObj.getString("plainLyrics") else null
+                            
+                            if (!synced.isNullOrBlank()) {
+                                return@withContext synced
+                            } else if (!plain.isNullOrBlank()) {
+                                return@withContext plain
                             }
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "lrclib scrape failed: ${e.message}")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "lrclib scrape failed: ${e.message}")
         }
         
-        // 2. Fallback to Genius if lrclib fails (or if forceGenius is true)
+        // 2. Fallback to Genius if lrclib fails
         try {
             val queryInput = if (cleanedArtist.isBlank()) {
                 cleanedTitle

@@ -70,12 +70,12 @@ object PlaybackManager {
     private val _lyricsState = MutableStateFlow(LyricsState.IDLE)
     val lyricsState = _lyricsState.asStateFlow()
 
-    fun loadLyricsForCurrentTrack(useGenius: Boolean = false) {
+    fun loadLyricsForCurrentTrack() {
         val track = _currentTrack.value ?: return
         _lyricsState.value = LyricsState.LOADING
         scope.launch {
             try {
-                val lyrics = com.example.api.LyricsProvider.fetchLyrics(track.author, track.title, useGenius)
+                val lyrics = com.example.api.LyricsProvider.fetchLyrics(track.author, track.title)
                 _currentTrackLyrics.value = lyrics
                 _lyricsState.value = LyricsState.SUCCESS
             } catch (e: Exception) {
