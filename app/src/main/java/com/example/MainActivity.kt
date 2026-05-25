@@ -2656,6 +2656,60 @@ private fun getSectionSuggestedRatio(headerText: String, sectionIndex: Int, sect
     }
 }
 
+object SmartSyncEngine {
+    // Levenshtein distance for fuzzy string matching (handles S2T errors, e.g. "merhabo" -> "merhaba")
+    fun levenshtein(lhs: CharSequence, rhs: CharSequence): Int {
+        val lhsLength = lhs.length
+        val rhsLength = rhs.length
+        var cost = IntArray(lhsLength + 1) { it }
+        var newCost = IntArray(lhsLength + 1) { 0 }
+        for (i in 1..rhsLength) {
+            newCost[0] = i
+            for (j in 1..lhsLength) {
+                val match = if (lhs[j - 1] == rhs[i - 1]) 0 else 1
+                val costReplace = cost[j - 1] + match
+                val costInsert = cost[j] + 1
+                val costDelete = newCost[j - 1] + 1
+                newCost[j] = minOf(costInsert, costDelete, costReplace)
+            }
+            val swap = cost; cost = newCost; newCost = swap
+        }
+        return cost[lhsLength]
+    }
+
+    fun wordSimilarity(word1: String, word2: String): Float {
+        val maxLen = maxOf(word1.length, word2.length)
+        if (maxLen == 0) return 1.0f
+        return 1.0f - (levenshtein(word1.lowercase(), word2.lowercase()).toFloat() / maxLen)
+    }
+
+    // Balances and matches the inaccurate Speech-To-Text result with the actual lyrics line
+    fun balanceAndSyncTranscribedText(transcribed: String, lines: List<TimedLine>): Int {
+        val words = transcribed.split(Regex("\\s+"))
+        var bestIndex = 0
+        var highestScore = 0.0f
+        lines.forEachIndexed { i, line ->
+            if (!line.isHeader) {
+                val lineWords = line.text.split(Regex("\\s+"))
+                var lineScore = 0.0f
+                for (tWord in words) {
+                    var bestWordSim = 0.0f
+                    for (lWord in lineWords) {
+                        val sim = wordSimilarity(tWord.trim(), lWord.trim())
+                        if (sim > bestWordSim) bestWordSim = sim
+                    }
+                    lineScore += bestWordSim
+                }
+                if (lineScore > highestScore) {
+                    highestScore = lineScore
+                    bestIndex = i
+                }
+            }
+        }
+        return bestIndex
+    }
+}
+
 private fun parseLyricsToTimedLines(rawLyrics: String): List<TimedLine> {
     if (rawLyrics.isBlank()) return emptyList()
     val allLines = rawLyrics.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
@@ -2785,6 +2839,8 @@ fun LyricsWidget(currentTrack: Track) {
     
     val currentRatio = if (durMs > 0) posMs.toFloat() / durMs else 0.0f
     
+    val isDownloaded = currentTrack.localFilePath != null || currentTrack.isDownloaded
+    
     val activeLineIndex = remember(timedLines, currentRatio) {
         if (timedLines.isEmpty()) 0
         else timedLines.indexOfLast { currentRatio >= it.startRatio }.coerceIn(0, timedLines.size - 1)
@@ -2871,21 +2927,46 @@ fun LyricsWidget(currentTrack: Track) {
                     if (timedLines.isEmpty()) {
                         Text("Sözler bulunamadı.", color = TextGrey, fontSize = 13.sp)
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Show 3 rotating lines around the active line
-                            val startToShow = (activeLineIndex - 1).coerceAtLeast(0)
-                            val endToShow = (startToShow + 2).coerceAtMost(timedLines.size - 1)
-                            
-                            for (index in startToShow..endToShow) {
-                                val line = timedLines[index]
-                                val isActive = index == activeLineIndex
+                        if (isDownloaded) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val startToShow = (activeLineIndex - 1).coerceAtLeast(0)
+                                val endToShow = (startToShow + 2).coerceAtMost(timedLines.size - 1)
+                                
+                                for (index in startToShow..endToShow) {
+                                    val line = timedLines[index]
+                                    val isActive = index == activeLineIndex
+                                    Text(
+                                        text = line.text,
+                                        color = if (isActive) SpotGreen else White.copy(alpha = 0.4f),
+                                        fontSize = if (isActive) 15.sp else 13.sp,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        } else {
+                            val rawLyrics = lyrics ?: ""
+                            val scrollState = androidx.compose.foundation.rememberScrollState()
+                            LaunchedEffect(posMs, durMs, scrollState.maxValue) {
+                                if (durMs > 0 && scrollState.maxValue > 0) {
+                                    val ratio = posMs.toFloat() / durMs
+                                    scrollState.scrollTo((ratio * scrollState.maxValue).toInt())
+                                }
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(80.dp)
+                                    .verticalScroll(scrollState, enabled = false)
+                            ) {
                                 Text(
-                                    text = line.text,
-                                    color = if (isActive) SpotGreen else White.copy(alpha = 0.4f),
-                                    fontSize = if (isActive) 15.sp else 13.sp,
-                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    text = rawLyrics,
+                                    color = White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp,
+                                    lineHeight = 20.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }
@@ -2956,7 +3037,11 @@ fun LyricsWidget(currentTrack: Track) {
                         }
                     }
                     
-                    Text("Şarki Sözleri (Müzik Ritmiyle Senkronize)", color = TextGrey.copy(alpha = 0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    if (isDownloaded) {
+                        Text("S2T AI Akıllı Senkronizasyon (Aktif)", color = SpotGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("Standart Kaydırma (Senkronize Değil)", color = TextGrey.copy(alpha = 0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
                     
                     Divider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
@@ -2988,75 +3073,120 @@ fun LyricsWidget(currentTrack: Track) {
                                     Text("Bu şarkı için sözler bulunamadı.", color = TextGrey)
                                 }
                             } else {
-                                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                
-                                LaunchedEffect(activeLineIndex) {
-                                    if (timedLines.isNotEmpty()) {
-                                        listState.animateScrollToItem(index = (activeLineIndex - 2).coerceAtLeast(0))
-                                    }
-                                }
-                                
-                                Box(modifier = Modifier.weight(1f)) {
-                                    LazyColumn(
-                                        state = listState,
-                                        modifier = Modifier.fillMaxSize(),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                                        contentPadding = PaddingValues(vertical = 40.dp)
-                                    ) {
-                                        itemsIndexed(timedLines) { index, timedLine ->
-                                            val isActive = index == activeLineIndex
-                                            val isHeader = timedLine.isHeader
-                                            
-                                            val textStyle = if (isHeader) {
-                                                androidx.compose.ui.text.TextStyle(
-                                                    color = SpotGreen.copy(alpha = 0.5f),
-                                                    fontSize = 14.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                                )
-                                            } else {
-                                                androidx.compose.ui.text.TextStyle(
-                                                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
-                                                    fontSize = if (isActive) 22.sp else 18.sp,
-                                                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
-                                                    shadow = if (isActive) androidx.compose.ui.graphics.Shadow(
-                                                        color = SpotGreen.copy(alpha = 0.8f),
-                                                        blurRadius = 12f
-                                                    ) else null
-                                                )
-                                            }
-                                            
-                                            Text(
-                                                text = timedLine.text,
-                                                style = textStyle,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        if (!isHeader && durMs > 0) {
-                                                            val targetPos = (timedLine.startRatio * durMs).toInt()
-                                                            PlaybackManager.seekTo(targetPos)
-                                                        }
-                                                    }
-                                                    .padding(vertical = 4.dp),
-                                                lineHeight = 28.sp
-                                            )
+                                if (isDownloaded) {
+                                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                    
+                                    LaunchedEffect(activeLineIndex) {
+                                        if (timedLines.isNotEmpty()) {
+                                            listState.animateScrollToItem(index = (activeLineIndex - 2).coerceAtLeast(0))
                                         }
                                     }
                                     
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(bottom = 12.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier
-                                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        LazyColumn(
+                                            state = listState,
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                                            contentPadding = PaddingValues(vertical = 40.dp)
                                         ) {
-                                            Icon(Icons.Default.Build, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(12.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Sözlere Dokunarak Sardır", color = White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            itemsIndexed(timedLines) { index, timedLine ->
+                                                val isActive = index == activeLineIndex
+                                                val isHeader = timedLine.isHeader
+                                                
+                                                val textStyle = if (isHeader) {
+                                                    androidx.compose.ui.text.TextStyle(
+                                                        color = SpotGreen.copy(alpha = 0.5f),
+                                                        fontSize = 14.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                                    )
+                                                } else {
+                                                    androidx.compose.ui.text.TextStyle(
+                                                        color = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
+                                                        fontSize = if (isActive) 22.sp else 18.sp,
+                                                        fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
+                                                        shadow = if (isActive) androidx.compose.ui.graphics.Shadow(
+                                                            color = SpotGreen.copy(alpha = 0.8f),
+                                                            blurRadius = 12f
+                                                        ) else null
+                                                    )
+                                                }
+                                                
+                                                Text(
+                                                    text = timedLine.text,
+                                                    style = textStyle,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            if (!isHeader && durMs > 0) {
+                                                                val targetPos = (timedLine.startRatio * durMs).toInt()
+                                                                PlaybackManager.seekTo(targetPos)
+                                                            }
+                                                        }
+                                                        .padding(vertical = 4.dp),
+                                                    lineHeight = 28.sp
+                                                )
+                                            }
+                                        }
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(bottom = 12.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier
+                                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            ) {
+                                                Icon(Icons.Default.Verified, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("S2T Kelime Eşleştirme Aktif", color = White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    val rawLyrics = lyrics ?: ""
+                                    val scrollState = androidx.compose.foundation.rememberScrollState()
+                                    LaunchedEffect(posMs, durMs, scrollState.maxValue) {
+                                        if (durMs > 0 && scrollState.maxValue > 0) {
+                                            val ratio = posMs.toFloat() / durMs
+                                            scrollState.scrollTo((ratio * scrollState.maxValue).toInt())
+                                        }
+                                    }
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .verticalScroll(scrollState)
+                                                .padding(vertical = 40.dp),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            timedLines.forEach { timedLine ->
+                                                val isHeader = timedLine.isHeader
+                                                val textStyle = if (isHeader) {
+                                                    androidx.compose.ui.text.TextStyle(
+                                                        color = SpotGreen.copy(alpha = 0.5f),
+                                                        fontSize = 14.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                                    )
+                                                } else {
+                                                    androidx.compose.ui.text.TextStyle(
+                                                        color = Color.White.copy(alpha = 0.6f),
+                                                        fontSize = 18.sp,
+                                                        fontWeight = FontWeight.Normal
+                                                    )
+                                                }
+                                                Text(
+                                                    text = timedLine.text,
+                                                    style = textStyle,
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                    lineHeight = 28.sp,
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                )
+                                            }
                                         }
                                     }
                                 }
