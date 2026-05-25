@@ -113,9 +113,9 @@ object PlaybackManager {
                         // ignore safe
                     }
                 }
-                progressHandler.postDelayed(this, 300)
+                progressHandler.postDelayed(this, 100)
             }
-        }, 300)
+        }, 100)
     }
 
     @Synchronized

@@ -2623,6 +2623,152 @@ private fun formatMs(ms: Int): String {
     return String.format("%02d:%02d", minutes, seconds)
 }
 
+data class TimedLine(
+    val text: String,
+    val isHeader: Boolean,
+    val startRatio: Float,
+    val endRatio: Float
+)
+
+private fun getSectionSuggestedRatio(headerText: String, sectionIndex: Int, sections: List<String>): Float {
+    val clean = headerText.lowercase()
+    var chorusCount = 0
+    var verseCount = 0
+    for (idx in 0 until sectionIndex) {
+        val h = sections[idx].lowercase()
+        if (h.contains("nakarat") || h.contains("chorus")) chorusCount++
+        if (h.contains("verse") || h.contains("bölüm")) verseCount++
+    }
+    
+    return when {
+        clean.contains("giriş") || clean.contains("intro") -> 0.02f
+        clean.contains("verse") || clean.contains("bölüm") -> {
+            if (verseCount == 0) 0.16f else 0.54f
+        }
+        clean.contains("nakarat") || clean.contains("chorus") -> {
+            if (chorusCount == 0) 0.36f else 0.72f
+        }
+        clean.contains("köprü") || clean.contains("bridge") -> {
+            if (sectionIndex > sections.size * 0.7f) 0.82f else 0.65f
+        }
+        clean.contains("çıkış") || clean.contains("outro") -> 0.88f
+        else -> (sectionIndex.toFloat() / sections.size).coerceIn(0.01f, 0.99f)
+    }
+}
+
+private fun parseLyricsToTimedLines(rawLyrics: String): List<TimedLine> {
+    if (rawLyrics.isBlank()) return emptyList()
+    val allLines = rawLyrics.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+    if (allLines.isEmpty()) return emptyList()
+    
+    // Group into sections
+    data class TmpSection(val header: String, val lines: List<String>)
+    val sectionsList = mutableListOf<TmpSection>()
+    
+    var currentHeader = ""
+    var currentLines = mutableListOf<String>()
+    
+    for (line in allLines) {
+        if (line.startsWith("[") && line.endsWith("]")) {
+            if (currentHeader.isNotEmpty() || currentLines.isNotEmpty()) {
+                sectionsList.add(TmpSection(currentHeader, currentLines))
+                currentLines = mutableListOf()
+            }
+            currentHeader = line
+        } else {
+            currentLines.add(line)
+        }
+    }
+    if (currentHeader.isNotEmpty() || currentLines.isNotEmpty()) {
+        sectionsList.add(TmpSection(currentHeader, currentLines))
+    }
+    
+    if (sectionsList.isEmpty()) {
+        sectionsList.add(TmpSection("", allLines))
+    }
+    
+    val sectionStarts = FloatArray(sectionsList.size)
+    var lastRatio = 0.00f
+    val headersNames = sectionsList.map { it.header }
+    
+    for (i in sectionsList.indices) {
+        val sec = sectionsList[i]
+        val suggested = if (sec.header.isEmpty()) {
+            (i.toFloat() / sectionsList.size).coerceIn(0.0f, 0.95f)
+        } else {
+            getSectionSuggestedRatio(sec.header, i, headersNames)
+        }
+        
+        val minAllowed = if (i == 0) 0.0f else lastRatio + 0.04f
+        val remainingSections = sectionsList.size - 1 - i
+        val maxAllowed = 1.0f - (remainingSections * 0.04f)
+        
+        val finalRatio = suggested.coerceIn(minAllowed, maxAllowed)
+        sectionStarts[i] = finalRatio
+        lastRatio = finalRatio
+    }
+    
+    val result = mutableListOf<TimedLine>()
+    
+    for (i in sectionsList.indices) {
+        val sec = sectionsList[i]
+        val currentRatio = sectionStarts[i]
+        val nextRatio = if (i + 1 < sectionsList.size) sectionStarts[i + 1] else 1.00f
+        val sectionDur = nextRatio - currentRatio
+        
+        if (sec.header.isNotEmpty()) {
+            val headerDur = (sectionDur * 0.08f).coerceAtMost(0.03f)
+            result.add(
+                TimedLine(
+                    text = sec.header,
+                    isHeader = true,
+                    startRatio = currentRatio,
+                    endRatio = currentRatio + headerDur
+                )
+            )
+            val remainingDur = sectionDur - headerDur
+            val startLyricsRatio = currentRatio + headerDur
+            
+            if (sec.lines.isNotEmpty()) {
+                val totalChars = sec.lines.sumOf { it.length }.coerceAtLeast(1)
+                var acc = startLyricsRatio
+                for (line in sec.lines) {
+                    val lineWeight = line.length.toFloat() / totalChars
+                    val lineDur = remainingDur * lineWeight
+                    result.add(
+                        TimedLine(
+                            text = line,
+                            isHeader = false,
+                            startRatio = acc,
+                            endRatio = acc + lineDur
+                        )
+                    )
+                    acc += lineDur
+                }
+            }
+        } else {
+            if (sec.lines.isNotEmpty()) {
+                val totalChars = sec.lines.sumOf { it.length }.coerceAtLeast(1)
+                var acc = currentRatio
+                for (line in sec.lines) {
+                    val lineWeight = line.length.toFloat() / totalChars
+                    val lineDur = sectionDur * lineWeight
+                    result.add(
+                        TimedLine(
+                            text = line,
+                            isHeader = false,
+                            startRatio = acc,
+                            endRatio = acc + lineDur
+                        )
+                    )
+                    acc += lineDur
+                }
+            }
+        }
+    }
+    return result
+}
+
 @Composable
 fun LyricsWidget(currentTrack: Track) {
     val lyrics by PlaybackManager.currentTrackLyrics.collectAsStateWithLifecycle()
@@ -2632,6 +2778,17 @@ fun LyricsWidget(currentTrack: Track) {
     
     val posMs by PlaybackManager.currentPositionMs.collectAsStateWithLifecycle()
     val durMs by PlaybackManager.durationMs.collectAsStateWithLifecycle()
+    
+    val timedLines = remember(lyrics) {
+        parseLyricsToTimedLines(lyrics ?: "")
+    }
+    
+    val currentRatio = if (durMs > 0) posMs.toFloat() / durMs else 0.0f
+    
+    val activeLineIndex = remember(timedLines, currentRatio) {
+        if (timedLines.isEmpty()) 0
+        else timedLines.indexOfLast { currentRatio >= it.startRatio }.coerceIn(0, timedLines.size - 1)
+    }
     
     Card(
         modifier = Modifier
@@ -2711,29 +2868,19 @@ fun LyricsWidget(currentTrack: Track) {
                     }
                 }
                 PlaybackManager.LyricsState.SUCCESS -> {
-                    val rawLyrics = lyrics ?: ""
-                    val lines = rawLyrics.split("\n").filter { it.isNotBlank() }
-                    
-                    if (lines.isEmpty() || rawLyrics.lowercase().contains("sözler bulunamadı")) {
+                    if (timedLines.isEmpty()) {
                         Text("Sözler bulunamadı.", color = TextGrey, fontSize = 13.sp)
                     } else {
-                        val N = lines.size
-                        val activeLineIndex = if (N > 0 && durMs > 0) {
-                            (posMs.toFloat() / durMs * N).toInt().coerceIn(0, N - 1)
-                        } else {
-                            0
-                        }
-                        
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             // Show 3 rotating lines around the active line
                             val startToShow = (activeLineIndex - 1).coerceAtLeast(0)
-                            val endToShow = (startToShow + 2).coerceAtMost(N - 1)
+                            val endToShow = (startToShow + 2).coerceAtMost(timedLines.size - 1)
                             
                             for (index in startToShow..endToShow) {
-                                val lineText = lines[index]
+                                val line = timedLines[index]
                                 val isActive = index == activeLineIndex
                                 Text(
-                                    text = lineText,
+                                    text = line.text,
                                     color = if (isActive) SpotGreen else White.copy(alpha = 0.4f),
                                     fontSize = if (isActive) 15.sp else 13.sp,
                                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
@@ -2836,25 +2983,15 @@ fun LyricsWidget(currentTrack: Track) {
                             }
                         }
                         PlaybackManager.LyricsState.SUCCESS -> {
-                            val rawLyrics = lyrics ?: ""
-                            val lines = rawLyrics.split("\n").filter { it.isNotBlank() }
-                            
-                            if (lines.isEmpty() || rawLyrics.lowercase().contains("sözler bulunamadı")) {
+                            if (timedLines.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Text("Bu şarkı için sözler bulunamadı.", color = TextGrey)
                                 }
                             } else {
-                                val N = lines.size
-                                val activeLineIndex = if (N > 0 && durMs > 0) {
-                                    (posMs.toFloat() / durMs * N).toInt().coerceIn(0, N - 1)
-                                } else {
-                                    0
-                                }
-                                
                                 val listState = androidx.compose.foundation.lazy.rememberLazyListState()
                                 
                                 LaunchedEffect(activeLineIndex) {
-                                    if (N > 0) {
+                                    if (timedLines.isNotEmpty()) {
                                         listState.animateScrollToItem(index = (activeLineIndex - 2).coerceAtLeast(0))
                                     }
                                 }
@@ -2866,9 +3003,9 @@ fun LyricsWidget(currentTrack: Track) {
                                         verticalArrangement = Arrangement.spacedBy(16.dp),
                                         contentPadding = PaddingValues(vertical = 40.dp)
                                     ) {
-                                        itemsIndexed(lines) { index, lineText ->
+                                        itemsIndexed(timedLines) { index, timedLine ->
                                             val isActive = index == activeLineIndex
-                                            val isHeader = lineText.startsWith("[") && lineText.endsWith("]")
+                                            val isHeader = timedLine.isHeader
                                             
                                             val textStyle = if (isHeader) {
                                                 androidx.compose.ui.text.TextStyle(
@@ -2890,13 +3027,13 @@ fun LyricsWidget(currentTrack: Track) {
                                             }
                                             
                                             Text(
-                                                text = lineText,
+                                                text = timedLine.text,
                                                 style = textStyle,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable {
-                                                        if (!isHeader && N > 0 && durMs > 0) {
-                                                            val targetPos = (index.toFloat() / N * durMs).toInt()
+                                                        if (!isHeader && durMs > 0) {
+                                                            val targetPos = (timedLine.startRatio * durMs).toInt()
                                                             PlaybackManager.seekTo(targetPos)
                                                         }
                                                     }
