@@ -2926,6 +2926,16 @@ fun LyricsWidget(currentTrack: Track) {
                 PlaybackManager.LyricsState.SUCCESS -> {
                     if (timedLines.isEmpty()) {
                         Text("Sözler bulunamadı.", color = TextGrey, fontSize = 13.sp)
+                    } else if (isDownloaded && posMs < 20000) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().height(80.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(color = SpotGreen, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("S2T ile senkronize ediliyor... (${posMs/1000}/20)", color = SpotGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     } else {
                         if (isDownloaded) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -3071,6 +3081,16 @@ fun LyricsWidget(currentTrack: Track) {
                             if (timedLines.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Text("Bu şarkı için sözler bulunamadı.", color = TextGrey)
+                                }
+                            } else if (isDownloaded && posMs < 20000) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator(color = SpotGreen, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text("S2T Ses & Metin Senkronizasyonu", color = White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("Yapay zeka sesi analiz ediyor... (${posMs/1000}/20 sn)", color = TextGrey, fontSize = 14.sp)
+                                    }
                                 }
                             } else {
                                 if (isDownloaded) {
