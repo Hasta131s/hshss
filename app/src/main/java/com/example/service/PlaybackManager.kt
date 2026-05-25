@@ -62,6 +62,29 @@ object PlaybackManager {
     private val _recommendedTracks = MutableStateFlow<List<Track>>(emptyList())
     val recommendedTracks = _recommendedTracks.asStateFlow()
 
+    enum class LyricsState { IDLE, LOADING, SUCCESS, ERROR }
+
+    private val _currentTrackLyrics = MutableStateFlow<String?>(null)
+    val currentTrackLyrics = _currentTrackLyrics.asStateFlow()
+
+    private val _lyricsState = MutableStateFlow(LyricsState.IDLE)
+    val lyricsState = _lyricsState.asStateFlow()
+
+    fun loadLyricsForCurrentTrack() {
+        val track = _currentTrack.value ?: return
+        _lyricsState.value = LyricsState.LOADING
+        scope.launch {
+            try {
+                val lyrics = com.example.api.LyricsProvider.fetchLyrics(track.author, track.title)
+                _currentTrackLyrics.value = lyrics
+                _lyricsState.value = LyricsState.SUCCESS
+            } catch (e: Exception) {
+                _currentTrackLyrics.value = "Sözler bulunamadı."
+                _lyricsState.value = LyricsState.ERROR
+            }
+        }
+    }
+
     fun setRecommendedTracks(tracks: List<Track>) {
         _recommendedTracks.value = tracks
     }
@@ -310,6 +333,18 @@ object PlaybackManager {
 
     private fun playCurrentTrack(track: Track) {
         onTrackChanged?.invoke(track)
+        _currentTrackLyrics.value = null
+        _lyricsState.value = LyricsState.LOADING
+        scope.launch {
+            try {
+                val lyrics = com.example.api.LyricsProvider.fetchLyrics(track.author, track.title)
+                _currentTrackLyrics.value = lyrics
+                _lyricsState.value = LyricsState.SUCCESS
+            } catch (e: Exception) {
+                _currentTrackLyrics.value = "Sözler bulunamadı."
+                _lyricsState.value = LyricsState.ERROR
+            }
+        }
         scope.launch {
             _isPlaying.value = false
             _isPlayingBuffering.value = true

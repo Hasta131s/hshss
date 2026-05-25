@@ -63,7 +63,6 @@ import com.example.ui.theme.DarkSurface
 import com.example.ui.theme.SpotGreen
 import com.example.ui.theme.TextGrey
 import com.example.ui.theme.White
-import com.example.ui.theme.Zinc700
 
 class MainActivity : ComponentActivity() {
 
@@ -820,7 +819,7 @@ fun MiniPlayerRow(
                     }
                 }
                 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(18.dp))
 
                 IconButton(
                     onClick = { PlaybackManager.skipToNext(context) },
@@ -1948,7 +1947,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                                 focusedTextColor = White, 
                                 unfocusedTextColor = White,
                                 focusedBorderColor = SpotGreen,
-                                unfocusedBorderColor = Zinc700,
+                                unfocusedBorderColor = Color(0xFF3F3F46),
                                 focusedLabelColor = SpotGreen,
                                 unfocusedLabelColor = TextGrey
                             ),
@@ -1963,7 +1962,7 @@ fun LibraryTab(viewModel: FlofysViewModel) {
                                 focusedTextColor = White, 
                                 unfocusedTextColor = White,
                                 focusedBorderColor = SpotGreen,
-                                unfocusedBorderColor = Zinc700,
+                                unfocusedBorderColor = Color(0xFF3F3F46),
                                 focusedLabelColor = SpotGreen,
                                 unfocusedLabelColor = TextGrey
                             ),
@@ -2436,21 +2435,14 @@ fun FullPlayerScreen(
             ) {
                 IconButton(
                     onClick = { PlaybackManager.rewind10s() },
-                    modifier = Modifier.width(72.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FastRewind,
-                            contentDescription = "-10s",
-                            tint = White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("10s", color = White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    }
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_replay_10),
+                        contentDescription = "-10s",
+                        tint = White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
                 Spacer(modifier = Modifier.width(32.dp))
                 Text(
@@ -2466,21 +2458,14 @@ fun FullPlayerScreen(
                 Spacer(modifier = Modifier.width(32.dp))
                 IconButton(
                     onClick = { PlaybackManager.forward10s() },
-                    modifier = Modifier.width(72.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text("10s", color = White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.FastForward,
-                            contentDescription = "10s+",
-                            tint = White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_forward_10),
+                        contentDescription = "10s+",
+                        tint = White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
 
@@ -2527,6 +2512,9 @@ fun FullPlayerScreen(
                     }
                 }
             }
+
+            // Interactive Live Sync Lyrics Widget (Spotify Collapsible style)
+            LyricsWidget(currentTrack = currentTrack)
 
             // RECOMMENDED SONGS SECTION (Önerilen Parçalar)
             if (recommendedTracks.isNotEmpty()) {
@@ -2633,6 +2621,315 @@ private fun formatMs(ms: Int): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
+}
+
+@Composable
+fun LyricsWidget(currentTrack: Track) {
+    val lyrics by PlaybackManager.currentTrackLyrics.collectAsStateWithLifecycle()
+    val state by PlaybackManager.lyricsState.collectAsStateWithLifecycle()
+    
+    var isExpanded by remember { mutableStateOf(false) }
+    
+    val posMs by PlaybackManager.currentPositionMs.collectAsStateWithLifecycle()
+    val durMs by PlaybackManager.durationMs.collectAsStateWithLifecycle()
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+            .clickable { isExpanded = true },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E102E)), // Spotify deep violet lyrics bg
+        border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.12f)),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Sözler",
+                        tint = SpotGreen,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Şarkı Sözleri",
+                        color = White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Genişlet",
+                        color = SpotGreen,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            when (state) {
+                PlaybackManager.LyricsState.LOADING -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = SpotGreen, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    }
+                }
+                PlaybackManager.LyricsState.ERROR -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Sözler henüz yüklenemedi.", color = TextGrey, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        TextButton(
+                            onClick = { PlaybackManager.loadLyricsForCurrentTrack() }
+                        ) {
+                            Text("Tekrar Dene", color = SpotGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                PlaybackManager.LyricsState.SUCCESS -> {
+                    val rawLyrics = lyrics ?: ""
+                    val lines = rawLyrics.split("\n").filter { it.isNotBlank() }
+                    
+                    if (lines.isEmpty() || rawLyrics.lowercase().contains("sözler bulunamadı")) {
+                        Text("Sözler bulunamadı.", color = TextGrey, fontSize = 13.sp)
+                    } else {
+                        val N = lines.size
+                        val activeLineIndex = if (N > 0 && durMs > 0) {
+                            (posMs.toFloat() / durMs * N).toInt().coerceIn(0, N - 1)
+                        } else {
+                            0
+                        }
+                        
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Show 3 rotating lines around the active line
+                            val startToShow = (activeLineIndex - 1).coerceAtLeast(0)
+                            val endToShow = (startToShow + 2).coerceAtMost(N - 1)
+                            
+                            for (index in startToShow..endToShow) {
+                                val lineText = lines[index]
+                                val isActive = index == activeLineIndex
+                                Text(
+                                    text = lineText,
+                                    color = if (isActive) SpotGreen else White.copy(alpha = 0.4f),
+                                    fontSize = if (isActive) 15.sp else 13.sp,
+                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+                PlaybackManager.LyricsState.IDLE -> {
+                    TextButton(
+                        onClick = { PlaybackManager.loadLyricsForCurrentTrack() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Şarkı Sözlerini Yükle", color = SpotGreen, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+    
+    if (isExpanded) {
+        Dialog(
+            onDismissRequest = { isExpanded = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0F0619))
+                    .systemBarsPadding()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = currentTrack.title,
+                                color = White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = currentTrack.author,
+                                color = SpotGreen,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        
+                        IconButton(
+                            onClick = { isExpanded = false },
+                            modifier = Modifier
+                                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                                .size(40.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Sözleri Kapat", tint = White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    
+                    Text("Şarki Sözleri (Müzik Ritmiyle Senkronize)", color = TextGrey.copy(alpha = 0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Divider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    when (state) {
+                        PlaybackManager.LyricsState.LOADING -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = SpotGreen)
+                            }
+                        }
+                        PlaybackManager.LyricsState.ERROR, PlaybackManager.LyricsState.IDLE -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Şarkı sözleri yüklenemedi.", color = TextGrey)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = { PlaybackManager.loadLyricsForCurrentTrack() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SpotGreen)
+                                    ) {
+                                        Text("Tekrar dene", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        PlaybackManager.LyricsState.SUCCESS -> {
+                            val rawLyrics = lyrics ?: ""
+                            val lines = rawLyrics.split("\n").filter { it.isNotBlank() }
+                            
+                            if (lines.isEmpty() || rawLyrics.lowercase().contains("sözler bulunamadı")) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Bu şarkı için sözler bulunamadı.", color = TextGrey)
+                                }
+                            } else {
+                                val N = lines.size
+                                val activeLineIndex = if (N > 0 && durMs > 0) {
+                                    (posMs.toFloat() / durMs * N).toInt().coerceIn(0, N - 1)
+                                } else {
+                                    0
+                                }
+                                
+                                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                
+                                LaunchedEffect(activeLineIndex) {
+                                    if (N > 0) {
+                                        listState.animateScrollToItem(index = (activeLineIndex - 2).coerceAtLeast(0))
+                                    }
+                                }
+                                
+                                Box(modifier = Modifier.weight(1f)) {
+                                    LazyColumn(
+                                        state = listState,
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                                        contentPadding = PaddingValues(vertical = 40.dp)
+                                    ) {
+                                        itemsIndexed(lines) { index, lineText ->
+                                            val isActive = index == activeLineIndex
+                                            val isHeader = lineText.startsWith("[") && lineText.endsWith("]")
+                                            
+                                            val textStyle = if (isHeader) {
+                                                androidx.compose.ui.text.TextStyle(
+                                                    color = SpotGreen.copy(alpha = 0.5f),
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                                )
+                                            } else {
+                                                androidx.compose.ui.text.TextStyle(
+                                                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
+                                                    fontSize = if (isActive) 22.sp else 18.sp,
+                                                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
+                                                    shadow = if (isActive) androidx.compose.ui.graphics.Shadow(
+                                                        color = SpotGreen.copy(alpha = 0.8f),
+                                                        blurRadius = 12f
+                                                    ) else null
+                                                )
+                                            }
+                                            
+                                            Text(
+                                                text = lineText,
+                                                style = textStyle,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        if (!isHeader && N > 0 && durMs > 0) {
+                                                            val targetPos = (index.toFloat() / N * durMs).toInt()
+                                                            PlaybackManager.seekTo(targetPos)
+                                                        }
+                                                    }
+                                                    .padding(vertical = 4.dp),
+                                                lineHeight = 28.sp
+                                            )
+                                        }
+                                    }
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(bottom = 12.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(Icons.Default.Build, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Sözlere Dokunarak Sardır", color = White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
