@@ -562,54 +562,54 @@ fun MainDashboard(viewModel: FlofysViewModel) {
     val allLocalTracks by viewModel.allTracks.collectAsStateWithLifecycle()
     
     LaunchedEffect(searchResults, allLocalTracks, playingTrack) {
-        val currentTrack = playingTrack
-        if (currentTrack != null) {
-            val allAvailable = (searchResults + allLocalTracks).distinctBy { it.id }
-            val scoredList = allAvailable.filter { it.id != currentTrack.id }
-                .map { candidate ->
-                    var score = 0
-                    val candAuthor = candidate.author.lowercase().trim()
-                    val currAuthor = currentTrack.author.lowercase().trim()
-                    
-                    // Match by artist/author
-                    if (candAuthor == currAuthor && currAuthor != "unknown artist" && currAuthor != "unknown channel") {
-                        score += 100
-                    } else if ((candAuthor.contains(currAuthor) || currAuthor.contains(candAuthor)) && 
-                               currAuthor != "unknown artist" && currAuthor != "unknown channel" && 
-                               candAuthor.length > 3 && currAuthor.length > 3) {
-                        score += 50
-                    }
-                    
-                    // Match by title keywords (same name/words)
-                    val candTitle = candidate.title.lowercase()
-                    val currTitleCleaned = currentTrack.title.lowercase()
-                        .replace(Regex("[^a-zA-Z0-9ğüşıöçâîû\\s]"), " ")
-                    
-                    // Exclude common noise terms from candidate keyword check to avoid false matches
-                    val stopWords = setOf("the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "with", "feat", "ft", "remix", "mix", "video", "audio", "lyrics", "official")
-                    val words = currTitleCleaned.split("\\s+".toRegex())
-                        .map { it.trim() }
-                        .filter { it.length >= 3 && !stopWords.contains(it) }
-                    
-                    var matchedTitleWords = 0
-                    for (word in words) {
-                        if (candTitle.contains(word)) {
-                            matchedTitleWords++
-                            score += 30
+            val currentTrack = playingTrack
+            if (currentTrack != null) {
+                val allAvailable = (searchResults + allLocalTracks).distinctBy { it.id }
+                val scoredList = allAvailable.filter { it.id != currentTrack.id }
+                    .map { candidate ->
+                        var score = 0
+                        val candAuthor = candidate.author.lowercase().trim()
+                        val currAuthor = currentTrack.author.lowercase().trim()
+                        
+                        // Match by artist/author
+                        if (candAuthor == currAuthor && currAuthor != "unknown artist" && currAuthor != "unknown channel") {
+                            score += 100
+                        } else if ((candAuthor.contains(currAuthor) || currAuthor.contains(candAuthor)) && 
+                                   currAuthor != "unknown artist" && currAuthor != "unknown channel" && 
+                                   candAuthor.length > 3 && currAuthor.length > 3) {
+                            score += 50
                         }
+                        
+                        // Match by title keywords (same name/words)
+                        val candTitle = candidate.title.lowercase()
+                        val currTitleCleaned = currentTrack.title.lowercase()
+                            .replace(Regex("[^a-zA-Z0-9ğüşıöçâîû\\s]"), " ")
+                        
+                        // Exclude common noise terms from candidate keyword check to avoid false matches
+                        val stopWords = setOf("the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "with", "feat", "ft", "remix", "mix", "video", "audio", "lyrics", "official")
+                        val words = currTitleCleaned.split("\\s+".toRegex())
+                            .map { it.trim() }
+                            .filter { it.length >= 3 && !stopWords.contains(it) }
+                        
+                        var matchedTitleWords = 0
+                        for (word in words) {
+                            if (candTitle.contains(word)) {
+                                matchedTitleWords++
+                                score += 30
+                            }
+                        }
+                        
+                        candidate to score
                     }
-                    
-                    candidate to score
-                }
-            
-            // Return only items that actually match the search criteria (score > 0)
-            val recommendations = scoredList.filter { it.second > 0 }
-                .sortedByDescending { it.second }
-                .map { it.first }
-                .distinctBy { it.id }
                 
-            PlaybackManager.setRecommendedTracks(recommendations)
-        } else {
+                // Return all items sorted by score to provide infinite skip experience
+                val recommendations = scoredList
+                    .sortedByDescending { it.second }
+                    .map { it.first }
+                    .distinctBy { it.id }
+                    
+                PlaybackManager.setRecommendedTracks(recommendations)
+            } else {
             PlaybackManager.setRecommendedTracks(emptyList())
         }
     }
@@ -2623,205 +2623,7 @@ private fun formatMs(ms: Int): String {
     return String.format("%02d:%02d", minutes, seconds)
 }
 
-data class TimedLine(
-    val text: String,
-    val isHeader: Boolean,
-    val startRatio: Float,
-    val endRatio: Float
-)
 
-private fun getSectionSuggestedRatio(headerText: String, sectionIndex: Int, sections: List<String>): Float {
-    val clean = headerText.lowercase()
-    var chorusCount = 0
-    var verseCount = 0
-    for (idx in 0 until sectionIndex) {
-        val h = sections[idx].lowercase()
-        if (h.contains("nakarat") || h.contains("chorus")) chorusCount++
-        if (h.contains("verse") || h.contains("bölüm")) verseCount++
-    }
-    
-    return when {
-        clean.contains("giriş") || clean.contains("intro") -> 0.02f
-        clean.contains("verse") || clean.contains("bölüm") -> {
-            if (verseCount == 0) 0.16f else 0.54f
-        }
-        clean.contains("nakarat") || clean.contains("chorus") -> {
-            if (chorusCount == 0) 0.36f else 0.72f
-        }
-        clean.contains("köprü") || clean.contains("bridge") -> {
-            if (sectionIndex > sections.size * 0.7f) 0.82f else 0.65f
-        }
-        clean.contains("çıkış") || clean.contains("outro") -> 0.88f
-        else -> (sectionIndex.toFloat() / sections.size).coerceIn(0.01f, 0.99f)
-    }
-}
-
-object SmartSyncEngine {
-    // Levenshtein distance for fuzzy string matching (handles S2T errors, e.g. "merhabo" -> "merhaba")
-    fun levenshtein(lhs: CharSequence, rhs: CharSequence): Int {
-        val lhsLength = lhs.length
-        val rhsLength = rhs.length
-        var cost = IntArray(lhsLength + 1) { it }
-        var newCost = IntArray(lhsLength + 1) { 0 }
-        for (i in 1..rhsLength) {
-            newCost[0] = i
-            for (j in 1..lhsLength) {
-                val match = if (lhs[j - 1] == rhs[i - 1]) 0 else 1
-                val costReplace = cost[j - 1] + match
-                val costInsert = cost[j] + 1
-                val costDelete = newCost[j - 1] + 1
-                newCost[j] = minOf(costInsert, costDelete, costReplace)
-            }
-            val swap = cost; cost = newCost; newCost = swap
-        }
-        return cost[lhsLength]
-    }
-
-    fun wordSimilarity(word1: String, word2: String): Float {
-        val maxLen = maxOf(word1.length, word2.length)
-        if (maxLen == 0) return 1.0f
-        return 1.0f - (levenshtein(word1.lowercase(), word2.lowercase()).toFloat() / maxLen)
-    }
-
-    // Balances and matches the inaccurate Speech-To-Text result with the actual lyrics line
-    fun balanceAndSyncTranscribedText(transcribed: String, lines: List<TimedLine>): Int {
-        val words = transcribed.split(Regex("\\s+"))
-        var bestIndex = 0
-        var highestScore = 0.0f
-        lines.forEachIndexed { i, line ->
-            if (!line.isHeader) {
-                val lineWords = line.text.split(Regex("\\s+"))
-                var lineScore = 0.0f
-                for (tWord in words) {
-                    var bestWordSim = 0.0f
-                    for (lWord in lineWords) {
-                        val sim = wordSimilarity(tWord.trim(), lWord.trim())
-                        if (sim > bestWordSim) bestWordSim = sim
-                    }
-                    lineScore += bestWordSim
-                }
-                if (lineScore > highestScore) {
-                    highestScore = lineScore
-                    bestIndex = i
-                }
-            }
-        }
-        return bestIndex
-    }
-}
-
-private fun parseLyricsToTimedLines(rawLyrics: String): List<TimedLine> {
-    if (rawLyrics.isBlank()) return emptyList()
-    val allLines = rawLyrics.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-    if (allLines.isEmpty()) return emptyList()
-    
-    // Group into sections
-    data class TmpSection(val header: String, val lines: List<String>)
-    val sectionsList = mutableListOf<TmpSection>()
-    
-    var currentHeader = ""
-    var currentLines = mutableListOf<String>()
-    
-    for (line in allLines) {
-        if (line.startsWith("[") && line.endsWith("]")) {
-            if (currentHeader.isNotEmpty() || currentLines.isNotEmpty()) {
-                sectionsList.add(TmpSection(currentHeader, currentLines))
-                currentLines = mutableListOf()
-            }
-            currentHeader = line
-        } else {
-            currentLines.add(line)
-        }
-    }
-    if (currentHeader.isNotEmpty() || currentLines.isNotEmpty()) {
-        sectionsList.add(TmpSection(currentHeader, currentLines))
-    }
-    
-    if (sectionsList.isEmpty()) {
-        sectionsList.add(TmpSection("", allLines))
-    }
-    
-    val sectionStarts = FloatArray(sectionsList.size)
-    var lastRatio = 0.00f
-    val headersNames = sectionsList.map { it.header }
-    
-    for (i in sectionsList.indices) {
-        val sec = sectionsList[i]
-        val suggested = if (sec.header.isEmpty()) {
-            (i.toFloat() / sectionsList.size).coerceIn(0.0f, 0.95f)
-        } else {
-            getSectionSuggestedRatio(sec.header, i, headersNames)
-        }
-        
-        val minAllowed = if (i == 0) 0.0f else lastRatio + 0.04f
-        val remainingSections = sectionsList.size - 1 - i
-        val maxAllowed = 1.0f - (remainingSections * 0.04f)
-        
-        val finalRatio = suggested.coerceIn(minAllowed, maxAllowed)
-        sectionStarts[i] = finalRatio
-        lastRatio = finalRatio
-    }
-    
-    val result = mutableListOf<TimedLine>()
-    
-    for (i in sectionsList.indices) {
-        val sec = sectionsList[i]
-        val currentRatio = sectionStarts[i]
-        val nextRatio = if (i + 1 < sectionsList.size) sectionStarts[i + 1] else 1.00f
-        val sectionDur = nextRatio - currentRatio
-        
-        if (sec.header.isNotEmpty()) {
-            val headerDur = (sectionDur * 0.08f).coerceAtMost(0.03f)
-            result.add(
-                TimedLine(
-                    text = sec.header,
-                    isHeader = true,
-                    startRatio = currentRatio,
-                    endRatio = currentRatio + headerDur
-                )
-            )
-            val remainingDur = sectionDur - headerDur
-            val startLyricsRatio = currentRatio + headerDur
-            
-            if (sec.lines.isNotEmpty()) {
-                val totalChars = sec.lines.sumOf { it.length }.coerceAtLeast(1)
-                var acc = startLyricsRatio
-                for (line in sec.lines) {
-                    val lineWeight = line.length.toFloat() / totalChars
-                    val lineDur = remainingDur * lineWeight
-                    result.add(
-                        TimedLine(
-                            text = line,
-                            isHeader = false,
-                            startRatio = acc,
-                            endRatio = acc + lineDur
-                        )
-                    )
-                    acc += lineDur
-                }
-            }
-        } else {
-            if (sec.lines.isNotEmpty()) {
-                val totalChars = sec.lines.sumOf { it.length }.coerceAtLeast(1)
-                var acc = currentRatio
-                for (line in sec.lines) {
-                    val lineWeight = line.length.toFloat() / totalChars
-                    val lineDur = sectionDur * lineWeight
-                    result.add(
-                        TimedLine(
-                            text = line,
-                            isHeader = false,
-                            startRatio = acc,
-                            endRatio = acc + lineDur
-                        )
-                    )
-                    acc += lineDur
-                }
-            }
-        }
-    }
-    return result
-}
 
 @Composable
 fun LyricsWidget(currentTrack: Track) {
@@ -2829,13 +2631,6 @@ fun LyricsWidget(currentTrack: Track) {
     val state by PlaybackManager.lyricsState.collectAsStateWithLifecycle()
     
     var isExpanded by remember { mutableStateOf(false) }
-    
-    val posMs by PlaybackManager.currentPositionMs.collectAsStateWithLifecycle()
-    val durMs by PlaybackManager.durationMs.collectAsStateWithLifecycle()
-    
-    val timedLines = remember(lyrics) {
-        parseLyricsToTimedLines(lyrics ?: "")
-    }
     
     Card(
         modifier = Modifier
@@ -2915,10 +2710,10 @@ fun LyricsWidget(currentTrack: Track) {
                     }
                 }
                 PlaybackManager.LyricsState.SUCCESS -> {
-                    if (timedLines.isEmpty()) {
+                    val rawLyrics = lyrics ?: ""
+                    if (rawLyrics.isBlank()) {
                         Text("Sözler bulunamadı.", color = TextGrey, fontSize = 13.sp)
                     } else {
-                        val rawLyrics = lyrics ?: ""
                         val scrollState = androidx.compose.foundation.rememberScrollState()
                         Column(
                             modifier = Modifier
@@ -3029,7 +2824,8 @@ fun LyricsWidget(currentTrack: Track) {
                             }
                         }
                         PlaybackManager.LyricsState.SUCCESS -> {
-                            if (timedLines.isEmpty()) {
+                            val rawLyrics = lyrics ?: ""
+                            if (rawLyrics.isBlank()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Text("Bu şarkı için sözler bulunamadı.", color = TextGrey)
                                 }
@@ -3043,30 +2839,17 @@ fun LyricsWidget(currentTrack: Track) {
                                             .padding(vertical = 40.dp),
                                         verticalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        timedLines.forEach { timedLine ->
-                                            val isHeader = timedLine.isHeader
-                                            val textStyle = if (isHeader) {
-                                                androidx.compose.ui.text.TextStyle(
-                                                    color = SpotGreen.copy(alpha = 0.5f),
-                                                    fontSize = 14.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                                )
-                                            } else {
-                                                androidx.compose.ui.text.TextStyle(
-                                                    color = Color.White.copy(alpha = 0.6f),
-                                                    fontSize = 18.sp,
-                                                    fontWeight = FontWeight.Normal
-                                                )
-                                            }
-                                            Text(
-                                                text = timedLine.text,
-                                                style = textStyle,
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                                lineHeight = 28.sp,
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                            )
-                                        }
+                                        Text(
+                                            text = rawLyrics,
+                                            style = androidx.compose.ui.text.TextStyle(
+                                                color = Color.White.copy(alpha = 0.8f),
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Normal
+                                            ),
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            lineHeight = 32.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
                                     }
                                 }
                             }

@@ -164,11 +164,33 @@ object PlaybackManager {
                         _currentTrack.value = firstTrack
                         playCurrentTrack(firstTrack)
                     } else {
-                        // End of playback
-                        _isPlaying.value = false
-                        _playbackProgress.value = 0f
-                        _currentPositionMs.value = 0
+                        val recs = _recommendedTracks.value
+                        if (recs.isNotEmpty()) {
+                            _playbackQueue.value = recs
+                            _currentQueueIndex.value = 0
+                            val nextTrack = recs[0]
+                            _currentTrack.value = nextTrack
+                            playCurrentTrack(nextTrack)
+                        } else {
+                            // End of playback
+                            _isPlaying.value = false
+                            _playbackProgress.value = 0f
+                            _currentPositionMs.value = 0
+                        }
                     }
+                }
+            } else {
+                val recs = _recommendedTracks.value
+                if (recs.isNotEmpty()) {
+                    _playbackQueue.value = recs
+                    _currentQueueIndex.value = 0
+                    val nextTrack = recs[0]
+                    _currentTrack.value = nextTrack
+                    playCurrentTrack(nextTrack)
+                } else {
+                    _isPlaying.value = false
+                    _playbackProgress.value = 0f
+                    _currentPositionMs.value = 0
                 }
             }
         }
@@ -271,25 +293,22 @@ object PlaybackManager {
                 playCurrentTrack(firstTrack)
                 startPlaybackService(context)
             } else {
-                // If we are at the end of the queue, or only playing a standalone track,
-                // try to play the first recommended track if available.
                 val recs = _recommendedTracks.value
                 if (recs.isNotEmpty()) {
-                    val nextTrack = recs[0]
-                    _playbackQueue.value = listOf(nextTrack)
+                    _playbackQueue.value = recs
                     _currentQueueIndex.value = 0
+                    val nextTrack = recs[0]
                     _currentTrack.value = nextTrack
                     playCurrentTrack(nextTrack)
                     startPlaybackService(context)
                 }
             }
         } else {
-            // Queue is empty or null, fallback to recommended tracks
             val recs = _recommendedTracks.value
             if (recs.isNotEmpty()) {
-                val nextTrack = recs[0]
-                _playbackQueue.value = listOf(nextTrack)
+                _playbackQueue.value = recs
                 _currentQueueIndex.value = 0
+                val nextTrack = recs[0]
                 _currentTrack.value = nextTrack
                 playCurrentTrack(nextTrack)
                 startPlaybackService(context)

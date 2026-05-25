@@ -24,13 +24,23 @@ object LyricsProvider {
      * Searches Genius and retrieves the lyrics text.
      */
     suspend fun fetchLyrics(artist: String, title: String): String = withContext(Dispatchers.IO) {
+        val cleanedTitle = title.replace(Regex("(?i)lyrics|lyric|video|audio|official|\\(.*?\\)|\\[.*?\\]"), "").trim()
+        val cleanedArtist = artist.replace(Regex("(?i)unknown"), "").trim()
+        
+        // 1. Try lyricsposter.com first
+        if (cleanedArtist.isNotEmpty() && cleanedTitle.isNotEmpty()) {
+            val fromPoster = scrapeLyricsFromPoster(cleanedArtist, cleanedTitle)
+            if (fromPoster != null) {
+                return@withContext fromPoster
+            }
+        }
+        
+        // 2. Fallback to Genius if poster fails
         try {
-            // Clean title and artist of extra terms
-            val cleanedTitle = title.replace(Regex("(?i)lyrics|lyric|video|audio|official|\\(.*?\\)|\\[.*?\\]"), "").trim()
-            val queryInput = if (artist.lowercase().contains("unknown") || artist.isBlank()) {
+            val queryInput = if (cleanedArtist.isBlank()) {
                 cleanedTitle
             } else {
-                "$artist $cleanedTitle"
+                "$cleanedArtist $cleanedTitle"
             }.trim()
             
             val query = URLEncoder.encode(queryInput, "UTF-8")
@@ -95,6 +105,87 @@ object LyricsProvider {
             Log.e(TAG, "Lyrics fetch/search failed: ${e.message}")
             return@withContext "Sözler aranırken bir hata oluştu: ${e.localizedMessage}"
         }
+    }
+
+    private fun scrapeLyricsFromPoster(artist: String, song: String): String? {
+        try {
+            val encodedArtist = URLEncoder.encode(artist.lowercase(), "UTF-8").replace("+", "%20")
+            val encodedSong = URLEncoder.encode(song.lowercase(), "UTF-8").replace("+", "%20")
+            val url = "https://www.lyricsposter.com/lyrics/$encodedArtist/$encodedSong"
+            
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+                .build()
+                
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val html = response.body?.string() ?: return null
+                
+                // Using method 2 from python: text extraction
+                // Since Kotlin doesn't have BeautifulSoup built-in, we use string parsing mimicking it, or regex.
+                
+                // Let's try to extract with regex for the container first
+                // Look for <h3>Lyrics</h3> and following <div>
+                var pattern = Pattern.compile("(?i)<h3>\\s*Lyrics\\s*</h3>\\s*<div[^>]*>(.*?)</div>", Pattern.DOTALL)
+                var matcher = pattern.matcher(html)
+                if (matcher.find()) {
+                    var content = matcher.group(1) ?: ""
+                    content = cleanHtml(content)
+                    if (content.isNotBlank()) return content
+                }
+                
+                // Regex Method 1 fallback
+                pattern = Pattern.compile("(?i)Lyrics\\s*</h3>\\s*<p[^>]*>(.*?)</p>", Pattern.DOTALL)
+                matcher = pattern.matcher(html)
+                if (matcher.find()) {
+                    var content = matcher.group(1) ?: ""
+                    content = cleanHtml(content)
+                    if (content.isNotBlank()) return content
+                }
+                
+                // Extract plain text and parse like Method 2
+                val textOnly = html.replace(Regex("<br\\s*/?>"), "\n").replace(Regex("<[^>]*>"), "")
+                if (textOnly.contains("Lyrics")) {
+                    val parts = textOnly.split("Lyrics")
+                    if (parts.size > 1) {
+                        val partAfterLyrics = parts[1]
+                        val lyricsPart = partAfterLyrics.split("Songs People Send")[0]
+                        val lines = lyricsPart.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                        
+                        if (lines.isNotEmpty()) {
+                            var startIndex = 0
+                            if (lines[0].startsWith("+") || lines[0].all { it.isDigit() }) {
+                                startIndex = 1
+                            }
+                            if (startIndex < lines.size) {
+                                val result = lines.subList(startIndex, lines.size).joinToString("\n").trim()
+                                // Sanity check to avoid returning huge chunks of garbage if parsing failed
+                                if (result.length > 20 && result.length < 5000) {
+                                    // Make sure it looks like lyrics and not JS or CSS
+                                    if (!result.contains("function()") && !result.contains("{")) {
+                                        return cleanTextHtml(result)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Poster scrape failed: ${e.message}")
+        }
+        return null
+    }
+    
+    private fun cleanTextHtml(text: String): String {
+        return text
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&#39;", "'")
+            .replace("&quot;", "\"")
     }
 
     private fun scrapeLyricsFromUrl(url: String): String {
