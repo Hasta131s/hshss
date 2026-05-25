@@ -36,6 +36,8 @@ object AILyricsEngine {
 
     private const val TAG = "AILyricsEngine"
 
+    private val alignmentCache = mutableMapOf<String, List<WordTiming>>()
+
     // 2.1 Ses Ön İşleme, 2.2 Metin Ön İşleme, 2.3 Zamanlama Tahmini
     suspend fun alignAudioAndText(
         audioTrackId: String,
@@ -43,8 +45,19 @@ object AILyricsEngine {
         audioDurationMs: Long
     ): List<WordTiming> = withContext(Dispatchers.Default) {
         
+        // 7. Önbelleğe al (tekrar aynı şarkı için işlem yapma)
+        if (alignmentCache.containsKey(audioTrackId)) {
+            Log.d(TAG, "Returning cached alignment for $audioTrackId")
+            return@withContext alignmentCache[audioTrackId]!!
+        }
+
         Log.d(TAG, "Starting AI alignment process for $audioTrackId.")
         Log.d(TAG, "MFA / WhisperX processing simulated... Duration: $\\{audioDurationMs}ms")
+        // 4. Vokal ayrıştırma: Demucs simülasyonu
+        Log.d(TAG, "Demucs ile vokal dosyası oluşturuluyor...")
+        
+        // 5. Forced alignment: WhisperX simülasyonu
+        Log.d(TAG, "WhisperX ile vokal dosyası transkribe edilecek...")
         
         val words = mutableListOf<String>()
         val lines = rawLyrics.split("\n")
@@ -121,15 +134,25 @@ object AILyricsEngine {
             }
         }
         
+        alignmentCache[audioTrackId] = timings
+        val generatedJson = toJsonString(timings)
+        Log.d(TAG, "6. JSON çıktısı: \n$generatedJson")
+        
         return@withContext timings
     }
 
-    // 2.5 Çıktı Formatı (JSON)
+    // 6. JSON Çıktısı Formatı
     fun toJsonString(timings: List<WordTiming>): String {
-        val array = JSONArray()
-        timings.forEach {
-            array.put(it.toJson())
+        val lyricsArray = JSONArray()
+        timings.forEach { t ->
+            val obj = JSONObject()
+            obj.put("text", t.word)
+            obj.put("startMs", t.startMs)
+            obj.put("endMs", t.endMs)
+            lyricsArray.put(obj)
         }
-        return array.toString(4)
+        val root = JSONObject()
+        root.put("lyrics", lyricsArray)
+        return root.toString(4)
     }
 }
