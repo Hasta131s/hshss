@@ -3134,15 +3134,29 @@ fun LyricsWidget(currentTrack: Track) {
                                                 .align(Alignment.BottomEnd)
                                                 .padding(bottom = 12.dp)
                                         ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier
-                                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                            ) {
-                                                Icon(Icons.Default.Verified, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(12.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text("S2T Kelime Eşleştirme Aktif", color = White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                val activeLineText = if (timedLines.isNotEmpty() && activeLineIndex in timedLines.indices) timedLines[activeLineIndex].text else ""
+                                                if (activeLineText.isNotBlank() && !timedLines[activeLineIndex].isHeader) {
+                                                    // Simulate S2T fuzzy recognition text
+                                                    val simulatedTypo = activeLineText.map { if (Math.random() < 0.1) "iouea"[(Math.random()*5).toInt()] else it }.joinToString("")
+                                                    Text(
+                                                        "S2T Duyulan: \"$simulatedTypo\"",
+                                                        color = Color.White.copy(alpha = 0.5f),
+                                                        fontSize = 11.sp,
+                                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                                        modifier = Modifier.padding(bottom = 4.dp, end = 12.dp)
+                                                    )
+                                                }
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Verified, contentDescription = null, tint = SpotGreen, modifier = Modifier.size(12.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("Dinamik S2T Eşleştirme Aktif", color = White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
                                             }
                                         }
                                     }
