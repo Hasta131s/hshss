@@ -1,6 +1,6 @@
 {
-  "name": "Flofys",
-  "description": "Spotify interface with YouTube search, download features, and beautiful local playlists",
+  "name": "SmartLyrics",
+  "description": "Yapay zeka analizli kelime kelime senkronize şarki sözü motoru (MFA/Spleeter Vokal Ayrıştırma simülasyonu)",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
