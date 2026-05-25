@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.app.ActivityCompat
@@ -2242,27 +2243,78 @@ fun FullPlayerScreen(
             val currentProgressValue = sliderDraggingValue ?: progress
             val currentDisplayPosMs = if (sliderDraggingValue != null) (sliderDraggingValue!! * durMs).toInt() else posMs
 
-            // STANDARD M3 SLIDER FOR ROBUST SEEKING
-            androidx.compose.material3.Slider(
-                value = currentProgressValue,
-                onValueChange = { fraction ->
-                    sliderDraggingValue = fraction
-                },
-                onValueChangeFinished = {
-                    val targetMilli = ((sliderDraggingValue ?: progress) * durMs).toInt()
-                    PlaybackManager.seekTo(targetMilli)
-                    sliderDraggingValue = null
-                },
+            // GORGEOUS CUSTOM SEEK BAR (Sleek, fluid, and modern Material 3 design)
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
-                    .height(24.dp),
-                colors = androidx.compose.material3.SliderDefaults.colors(
-                    thumbColor = SpotGreen,
-                    activeTrackColor = SpotGreen,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.12f)
+                    .padding(horizontal = 12.dp)
+                    .height(24.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures { offset ->
+                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                            sliderDraggingValue = fraction
+                            val targetMilli = (fraction * durMs).toInt()
+                            PlaybackManager.seekTo(targetMilli)
+                            sliderDraggingValue = null
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { offset ->
+                                val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                sliderDraggingValue = fraction
+                            },
+                            onDragEnd = {
+                                val currentFrac = sliderDraggingValue ?: progress
+                                val targetMilli = (currentFrac * durMs).toInt()
+                                PlaybackManager.seekTo(targetMilli)
+                                sliderDraggingValue = null
+                            },
+                            onDragCancel = {
+                                sliderDraggingValue = null
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                val newX = change.position.x
+                                val fraction = (newX / size.width).coerceIn(0f, 1f)
+                                sliderDraggingValue = fraction
+                            }
+                        )
+                    }
+            ) {
+                val activeWidthDp = maxWidth * currentProgressValue
+
+                // Track Background
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .align(Alignment.Center)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f))
                 )
-            )
+
+                // Active Highlight Track
+                Box(
+                    modifier = Modifier
+                        .width(activeWidthDp)
+                        .height(4.dp)
+                        .align(Alignment.CenterStart)
+                        .clip(CircleShape)
+                        .background(SpotGreen)
+                )
+
+                // Thumb Button dot
+                Box(
+                    modifier = Modifier
+                        .offset(x = activeWidthDp - 7.dp)
+                        .size(14.dp)
+                        .align(Alignment.CenterStart)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.5.dp, SpotGreen, CircleShape)
+                )
+            }
 
             // Duration labels
             Row(
@@ -2938,11 +2990,7 @@ fun LyricsWidget(currentTrack: Track) {
                                                     androidx.compose.ui.text.TextStyle(
                                                         color = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
                                                         fontSize = if (isActive) 24.sp else 18.sp,
-                                                        fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
-                                                        shadow = if (isActive) androidx.compose.ui.graphics.Shadow(
-                                                            color = SpotGreen.copy(alpha = 0.8f),
-                                                            blurRadius = 12f
-                                                        ) else null
+                                                        fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold
                                                     )
                                                 }
                                                 
