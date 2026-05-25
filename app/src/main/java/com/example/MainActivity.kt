@@ -2242,74 +2242,27 @@ fun FullPlayerScreen(
             val currentProgressValue = sliderDraggingValue ?: progress
             val currentDisplayPosMs = if (sliderDraggingValue != null) (sliderDraggingValue!! * durMs).toInt() else posMs
 
-            // GORGEOUS CUSTOM SEEK BAR (Sleek, fluid, and modern Material 3 design)
-            BoxWithConstraints(
+            // STANDARD M3 SLIDER FOR ROBUST SEEKING
+            androidx.compose.material3.Slider(
+                value = currentProgressValue,
+                onValueChange = { fraction ->
+                    sliderDraggingValue = fraction
+                },
+                onValueChangeFinished = {
+                    val targetMilli = ((sliderDraggingValue ?: progress) * durMs).toInt()
+                    PlaybackManager.seekTo(targetMilli)
+                    sliderDraggingValue = null
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .height(20.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures { offset ->
-                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                            sliderDraggingValue = fraction
-                            val targetMilli = (fraction * durMs).toInt()
-                            PlaybackManager.seekTo(targetMilli)
-                            sliderDraggingValue = null
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { },
-                            onDragEnd = {
-                                val targetMilli = ((sliderDraggingValue ?: progress) * durMs).toInt()
-                                PlaybackManager.seekTo(targetMilli)
-                                sliderDraggingValue = null
-                            },
-                            onDragCancel = {
-                                sliderDraggingValue = null
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                val newX = change.position.x
-                                val fraction = (newX / size.width).coerceIn(0f, 1f)
-                                sliderDraggingValue = fraction
-                            }
-                        )
-                    }
-            ) {
-                val activeWidthDp = maxWidth * currentProgressValue
-
-                // Track Background
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .align(Alignment.Center)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
+                    .padding(horizontal = 4.dp)
+                    .height(24.dp),
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = SpotGreen,
+                    activeTrackColor = SpotGreen,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.12f)
                 )
-
-                // Active Highlight Track
-                Box(
-                    modifier = Modifier
-                        .width(activeWidthDp)
-                        .height(4.dp)
-                        .align(Alignment.CenterStart)
-                        .clip(CircleShape)
-                        .background(SpotGreen)
-                )
-
-                // Thumb Button dot
-                Box(
-                    modifier = Modifier
-                        .offset(x = activeWidthDp - 7.dp)
-                        .size(14.dp)
-                        .align(Alignment.CenterStart)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .border(2.dp, SpotGreen, CircleShape)
-                )
-            }
+            )
 
             // Duration labels
             Row(
@@ -2763,10 +2716,17 @@ fun LyricsWidget(currentTrack: Track) {
                     ) {
                         Text("Sözler henüz yüklenemedi.", color = TextGrey, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(6.dp))
-                        TextButton(
-                            onClick = { PlaybackManager.loadLyricsForCurrentTrack() }
-                        ) {
-                            Text("Tekrar Dene", color = SpotGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = { PlaybackManager.loadLyricsForCurrentTrack() }
+                            ) {
+                                Text("Lrclib (Otomatik)", color = SpotGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            TextButton(
+                                onClick = { PlaybackManager.loadLyricsForCurrentTrack(useGenius = true) }
+                            ) {
+                                Text("Genius API", color = White.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -2813,11 +2773,22 @@ fun LyricsWidget(currentTrack: Track) {
                     }
                 }
                 PlaybackManager.LyricsState.IDLE -> {
-                    TextButton(
-                        onClick = { PlaybackManager.loadLyricsForCurrentTrack() },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Şarkı Sözlerini Yükle", color = SpotGreen, fontWeight = FontWeight.Bold)
+                        TextButton(
+                            onClick = { PlaybackManager.loadLyricsForCurrentTrack() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Sözleri Yükle (LrcLib)", color = SpotGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                        TextButton(
+                            onClick = { PlaybackManager.loadLyricsForCurrentTrack(useGenius = true) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Genius (Yedek)", color = White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
                     }
                 }
             }
@@ -2903,12 +2874,20 @@ fun LyricsWidget(currentTrack: Track) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Şarkı sözleri yüklenemedi.", color = TextGrey)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Button(
-                                        onClick = { PlaybackManager.loadLyricsForCurrentTrack() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = SpotGreen)
-                                    ) {
-                                        Text("Tekrar dene", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Button(
+                                            onClick = { PlaybackManager.loadLyricsForCurrentTrack() },
+                                            colors = ButtonDefaults.buttonColors(containerColor = SpotGreen)
+                                        ) {
+                                            Text("LRC Lib'den Getir", color = Color.Black, fontWeight = FontWeight.Bold)
+                                        }
+                                        Button(
+                                            onClick = { PlaybackManager.loadLyricsForCurrentTrack(useGenius = true) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f))
+                                        ) {
+                                            Text("Genius API (Yedek)", color = White, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
